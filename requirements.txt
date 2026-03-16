@@ -1,3 +1,25 @@
 torch
 torchvision
 matplotlib
+
+*Python environment*
+Python 3.10+ recommended.
+Install packages from your requirements.txt:
+torch>=2.2.0
+torchvision>=0.17.0
+tqdm>=4.66.0
+pyyaml>=6.0.1
+numpy>=1.26.0
+pillow>=10.0.0
+scikit-image>=0.22.0
+opencv-python (for cv2)
+scikit-learn (SC1/SC2 baselines)
+scipy (SFH baseline)
+Optional: face-alignment (SFH can run without it, but with reduced behavior)
+
+*Dataset requirement*
+CelebA must already exist locally under --data_root in torchvision’s expected structure.
+Your code mostly uses download=False, so missing dataset will fail.
+Typical expected path pattern:
+<data_root>/celeba/img_align_celeba
+plus CelebA annotation files
