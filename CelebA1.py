@@ -30,6 +30,17 @@ except ImportError as e:
     raise RuntimeError("scipy required for SFH baseline. pip install scipy") from e
 
 
+def set_global_seed(seed: int, deterministic: bool = False) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
 ############################################
 # Models
 ############################################
@@ -1334,6 +1345,7 @@ def main():
         type=str,
         default="checkpoints",
     )
+    train_p.add_argument("--seed", type=int, default=42)
 
     # Eval Gaussian
     eval_g = subparsers.add_parser(
@@ -1354,6 +1366,7 @@ def main():
         default="cuda" if torch.cuda.is_available() else "cpu",
     )
     eval_g.add_argument("--batch_size", type=int, default=64)
+    eval_g.add_argument("--seed", type=int, default=42)
 
     # Eval Motion
     eval_m = subparsers.add_parser(
@@ -1374,6 +1387,7 @@ def main():
         default="cuda" if torch.cuda.is_available() else "cpu",
     )
     eval_m.add_argument("--batch_size", type=int, default=64)
+    eval_m.add_argument("--seed", type=int, default=42)
 
     # Print Table 2 (all 6 methods) from AAAI 2015 paper
     subparsers.add_parser(
@@ -1442,12 +1456,14 @@ def main():
         default=6.0,
         help="Length to use for motion blur sample",
     )
+    sample_p.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
 
     if args.command == "train":
+        set_global_seed(args.seed)
         os.makedirs(args.save_dir, exist_ok=True)
-        train_idx, val_idx, _ = load_celeba_splits(args.data_root)
+        train_idx, val_idx, _ = load_celeba_splits(args.data_root, seed=args.seed)
 
         train_ds = CelebAFaceHallucination(
             root=args.data_root,
@@ -1559,7 +1575,8 @@ def main():
                 epochs_no_improve = 0
 
     elif args.command in ("eval_gaussian", "eval_motion"):
-        _, _, test_idx = load_celeba_splits(args.data_root)
+        set_global_seed(args.seed)
+        _, _, test_idx = load_celeba_splits(args.data_root, seed=args.seed)
 
         if args.model == "bichannel":
             model = BiChannelCNN()
@@ -1605,9 +1622,7 @@ def main():
         print_paper_table_2_all_six()
     elif args.command == "eval_baselines":
         # Pipeline: train (SC1, SC2; Bicubic has no training; SFH uses trained SC1) -> validate (all 4 baselines on val set) -> evaluate (all 4 or all 6 if CNN checkpoints provided)
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
+        set_global_seed(args.seed)
         train_idx, val_idx, test_idx = load_celeba_splits(args.data_root, seed=args.seed)
         hr_train = get_hr_arrays_from_celeba(args.data_root, train_idx, limit=args.train_hr_limit)
         hr_val = get_hr_arrays_from_celeba(args.data_root, val_idx, limit=args.val_hr_limit)
@@ -1712,8 +1727,9 @@ def main():
         print("\n--- Paper Table 2 (reference, all 6 methods) ---")
         print_paper_table_2_all_six()
     elif args.command == "show_sample":
+        set_global_seed(args.seed)
         # Load CelebA and take a single random image from the training split
-        train_idx, _, _ = load_celeba_splits(args.data_root)
+        train_idx, _, _ = load_celeba_splits(args.data_root, seed=args.seed)
         base = CelebA(
             root=args.data_root,
             split="all",
@@ -1786,3 +1802,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
