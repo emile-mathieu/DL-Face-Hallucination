@@ -800,7 +800,11 @@ def compute_psnr(hr: np.ndarray, sr: np.ndarray) -> float:
 
 
 def compute_ssim(hr: np.ndarray, sr: np.ndarray) -> float:
-    return structural_similarity(hr, sr, multichannel=True, data_range=1.0)
+    # skimage>=0.19 expects channel_axis; older versions expect multichannel.
+    try:
+        return structural_similarity(hr, sr, channel_axis=-1, data_range=1.0)
+    except TypeError:
+        return structural_similarity(hr, sr, multichannel=True, data_range=1.0)
 
 
 ############################################
