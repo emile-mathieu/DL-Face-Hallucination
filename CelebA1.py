@@ -2,6 +2,7 @@ import os
 import math
 import random
 import argparse
+import warnings
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -19,6 +20,7 @@ from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
 try:
     from sklearn.decomposition import DictionaryLearning
+    from sklearn.exceptions import ConvergenceWarning
     from sklearn.linear_model import Lasso
     from sklearn.neighbors import NearestNeighbors
 except ImportError as e:
@@ -528,6 +530,8 @@ class SR1_SC1_Yang:
         stride: int = 2,
         n_atoms: int = 256,
         lasso_alpha: float = 0.002,
+        lasso_max_iter: int = 3000,
+        lasso_tol: float = 2e-4,
         dl_iter: int = 120,
         max_train_patches: int = 120_000,
     ):
@@ -535,11 +539,19 @@ class SR1_SC1_Yang:
         self.stride = stride
         self.n_atoms = n_atoms
         self.lasso_alpha = lasso_alpha
+        self.lasso_max_iter = lasso_max_iter
+        self.lasso_tol = lasso_tol
         self.dl_iter = dl_iter
         self.max_train_patches = max_train_patches
         self.Dl: Optional[np.ndarray] = None
         self.Dh: Optional[np.ndarray] = None
-        self._lasso = Lasso(alpha=lasso_alpha, fit_intercept=False, max_iter=2000, warm_start=False)
+        self._lasso = Lasso(
+            alpha=lasso_alpha,
+            fit_intercept=False,
+            max_iter=lasso_max_iter,
+            tol=lasso_tol,
+            warm_start=True,
+        )
 
     @staticmethod
     def _row_normalize(X: np.ndarray) -> np.ndarray:
@@ -584,7 +596,9 @@ class SR1_SC1_Yang:
 
     def _code(self, x: np.ndarray) -> np.ndarray:
         assert self.Dl is not None
-        self._lasso.fit(self.Dl.T, x)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=ConvergenceWarning)
+            self._lasso.fit(self.Dl.T, x)
         return self._lasso.coef_.astype(np.float32)
 
     def predict(self, lr100_rgb: np.ndarray) -> np.ndarray:
@@ -994,7 +1008,8 @@ def eval_method_on_conditions(
     out: Dict[str, MethodResult] = {}
     for cond in conditions:
         psnrs, ssims = [], []
-        for hr in hr100_test:
+        total = len(hr100_test)
+        for i, hr in enumerate(hr100_test, start=1):
             if cond.kind == "motion":
                 deg = Degradation(kind="motion", length=cond.length, theta=float(rng.uniform(-math.pi, math.pi)))
             else:
@@ -1005,9 +1020,12 @@ def eval_method_on_conditions(
             pred = np.clip(pred, 0.0, 1.0)
             psnrs.append(compute_psnr(hr, pred))
             ssims.append(compute_ssim(hr, pred))
+            if i % 25 == 0 or i == total:
+                ckey = f"sigma={cond.sigma:g}" if cond.kind == "gaussian" else f"l={cond.length:g}"
+                print(f"[{method_name}] {ckey}: processed {i}/{total} images...", flush=True)
         key = f"sigma={cond.sigma:g}" if cond.kind == "gaussian" else f"l={cond.length:g}"
         out[key] = MethodResult(psnr=float(np.mean(psnrs)), ssim=float(np.mean(ssims)))
-        print(f"[{method_name}] {key}: PSNR={out[key].psnr:.2f}, SSIM={out[key].ssim:.3f}")
+        print(f"[{method_name}] {key}: PSNR={out[key].psnr:.2f}, SSIM={out[key].ssim:.3f}", flush=True)
     return out
 
 
