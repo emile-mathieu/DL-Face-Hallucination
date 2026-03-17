@@ -50,7 +50,7 @@ The script reproduces **“Learning Face Hallucination in the Wild”** (Zhou et
 | **Blur ranges** | σ∈[0,7], motion length ∈[0,11], θ∈[−π,π]; downscale factor 2–5. |
 | **Network (Table 1)** | 3 conv+pool (32, 64, 128 filters); Bi-channel: two FC groups (I_rec and α). |
 | **Input/output** | CNN input 48×48 RGB; output 100×100 RGB. |
-| **Init & training** | Weights N(0, 0.001), biases 0; SGD momentum 0.9, lr=1e-5; lr decay on val plateau; batch 200, ~5000 epochs. |
+| **Init & training** | Weights N(0, 0.001), biases 0; SGD momentum 0.9, lr=1e-5; lr decay on val plateau; batch 200, 5000 cycles (means roughtly 8-9 epochs) |
 | **Fusion (Eq. 10)** | α·↑Iin + (1−α)·Irec, α∈[0,1]. |
 | **Table 2** | Bicubic, SC1, SC2, SFH, Basic CNN, Bi-channel CNN; σ=1,3,5 and l=2,6,9; PSNR/SSIM. |
 | **Split** | 60% train, 20% val, 20% test. |
