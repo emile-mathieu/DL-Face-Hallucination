@@ -6,8 +6,8 @@
 #SBATCH --mem=16G
 #SBATCH --job-name=print_paper_table
 #SBATCH --time=06:00:00
-#SBATCH --output=output4_%x_%j.out
-#SBATCH --error=error4_%x_%j.err
+#SBATCH --output=../logs/output4_%x_%j.out
+#SBATCH --error=../logs/error4_%x_%j.err
 
 module load cuda/12.8.0
 module load anaconda

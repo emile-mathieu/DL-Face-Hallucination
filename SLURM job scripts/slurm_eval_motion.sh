@@ -6,8 +6,8 @@
 #SBATCH --mem=16G
 #SBATCH --job-name=eval_motion
 #SBATCH --time=06:00:00
-#SBATCH --output=output4_%x_%j.out
-#SBATCH --error=error4_%x_%j.err
+#SBATCH --output=../logs/output4_%x_%j.out
+#SBATCH --error=../logs/error4_%x_%j.err
 
 module load cuda/12.8.0
 module load anaconda
@@ -21,8 +21,11 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Set CHECKPOINT to your saved .pt file (e.g. checkpoints/bichannel_mixed.pt or checkpoints/basic_mixed.pt). Change model accordinly
 # Can change --metric_color_space to rgb or y for different metrics (e.g. PSNR in RGB vs Y channel). Note that SFH is only computed in Y channel, so use --metric_color_space y for that.
 
-WORKDIR=/home/msds/tans0444
-SAVE_DIR=/home/msds/tans0444/checkpoints
+parent_dir="$(dirname "$(pwd)")"
+echo "$parent_dir"
+
+WORKDIR=$parent_dir
+SAVE_DIR=$parent_dir/checkpoints
 CKPT="${SAVE_DIR}/basic_mixed.pt"
 
 cd "${WORKDIR}"

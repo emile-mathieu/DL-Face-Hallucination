@@ -6,8 +6,8 @@
 #SBATCH --mem=16G
 #SBATCH --job-name=run8fh_eval_gaussian
 #SBATCH --time=06:00:00
-#SBATCH --output=output4_%x_%j.out
-#SBATCH --error=error4_%x_%j.err
+#SBATCH --output=../logs/output4_%x_%j.out
+#SBATCH --error=../logs/error4_%x_%j.err
 
 module load cuda/12.8.0
 module load anaconda
@@ -21,9 +21,12 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # can switch between bichannel and basic by changing --model and checkpoint path accordingly
 # can change --metric_color_space to rgb or y for different metrics (e.g. PSNR in RGB vs Y channel)
 
-WORKDIR=/home/msds/tans0444
-DATA_ROOT=/home/msds/tans0444
-SAVE_DIR=/home/msds/tans0444/checkpoints
+parent_dir="$(dirname "$(pwd)")"
+echo "$parent_dir"
+
+WORKDIR=$parent_dir
+DATA_ROOT=$parent_dir
+SAVE_DIR=$parent_dir/checkpoints
 CKPT="${SAVE_DIR}/basic_mixed.pt"
 
 cd "${WORKDIR}"

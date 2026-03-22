@@ -6,8 +6,8 @@
 #SBATCH --mem=16G
 #SBATCH --job-name=train_basic
 #SBATCH --time=06:00:00
-#SBATCH --output=output4_%x_%j.out
-#SBATCH --error=error4_%x_%j.err
+#SBATCH --output=../logs/output4_%x_%j.out
+#SBATCH --error=../logs/error4_%x_%j.err
 
 module load cuda/12.8.0
 module load anaconda
@@ -19,9 +19,12 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Train Basic CNN (no fusion) on CelebA for ablation.
 
-WORKDIR=/home/msds/tans0444
-DATA_ROOT=/home/msds/tans0444
-SAVE_DIR=/home/msds/tans0444/checkpoints
+parent_dir="$(dirname "$(pwd)")"
+echo "$parent_dir"
+
+WORKDIR=$parent_dir
+DATA_ROOT=$parent_dir
+SAVE_DIR=$parent_dir/checkpoints
 
 cd "${WORKDIR}"
 echo "PWD=$(pwd)"
@@ -34,7 +37,7 @@ python CelebA2.py train \
   --model basic \
   --blur_type mixed \
   --batch_size 200 \
-  --epochs 5000 \
+  --epochs 25 \
   --lr 1e-5 \
   --min_lr 1e-6 \
   --device cuda \
