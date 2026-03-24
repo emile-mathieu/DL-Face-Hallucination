@@ -1,10 +1,3 @@
-# Model architecture: As the paper: 
-# Low-res (variable size like 20–50)
-#         ↓
-# Resize → 48×48 (Iin)
-#         ↓
-# Model
-#         ↓
-# Output → 100×100 (SR)
-#         ↓
-# Compare with HR target (IH) → compute loss
+# TODO: Main entry point for the application
+if __name__ == "__main__":
+    print("Hello, World!")

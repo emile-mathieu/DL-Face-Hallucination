@@ -3,17 +3,17 @@
 ```project/
 │
 ├── data/
-│   ├── dataset.py        # Loads images and creates (LR, HR) pairs
-│   └── dataloader.py     # Wraps dataset into PyTorch DataLoader
+│   ├── dataset.py        # Loads images and creates (LR, HR) pairs FINISHED
+│   └── dataloader.py     # Wraps dataset into PyTorch DataLoader FINISHED
 │
 ├── models/
-│   └── model.py          # Bi-Channel CNN architecture
+│   └── model.py          # Bi-Channel CNN architecture (NOT FINISHED!)
 │
 ├── training/
-│   ├── train.py          # Training loop (forward, loss, backprop)
-│   └── test.py           # Evaluation / inference
+│   ├── train.py          # Training loop (forward, loss, backprop) FINISHED
+│   └── test.py           # Evaluation / inference FINISHED
 │
-└── main.py               # Entry point (run training or testing)
+└── main.py               # Entry point (run training or testing) TODO
 ```
 ---
 # 🔄 Pipeline Overview
