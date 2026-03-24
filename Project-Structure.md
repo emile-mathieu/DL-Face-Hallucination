@@ -10,8 +10,8 @@
 │   └── model.py          # Bi-Channel CNN architecture (NOT FINISHED!)
 │
 ├── training/
-│   ├── train.py          # Training loop (forward, loss, backprop) FINISHED
-│   └── test.py           # Evaluation / inference FINISHED
+│   ├── train.py          # Training loop (forward, loss, backprop) (NOT FINISHED!)
+│   └── test.py           # Evaluation / inference FINISHED (NOT FINISHED!)
 │
 └── main.py               # Entry point (run training or testing) TODO
 ```
