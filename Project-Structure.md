@@ -7,7 +7,7 @@
 │   └── dataloader.py     # Wraps dataset into PyTorch DataLoader FINISHED
 │
 ├── models/
-│   └── model.py          # Bi-Channel CNN architecture (NOT FINISHED!)
+│   └── model.py          # Bi-Channel CNN architecture FINISHED
 │
 ├── training/
 │   ├── train.py          # Training loop (forward, loss, backprop) (NOT FINISHED!)
