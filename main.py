@@ -9,7 +9,7 @@ from models.model import BiChannelCNN
 from training.train import train
 from training.test import evaluate
 
-
+# Main entry point, becareful (plz) with this file as it runs the whole pipeline (training + eval).
 def main():
     # -------------------------
     # 1. Config
