@@ -1,9 +1,14 @@
 import torch
 from torchmetrics.image import StructuralSimilarityIndexMeasure
+from utils.logger import save_metrics_to_csv
 
-# PSNR function
+
+# -------------------------
+# PSNR (safe)
+# -------------------------
 def psnr(pred, target):
     mse = torch.mean((pred - target) ** 2)
+    mse = torch.clamp(mse, min=1e-10)
     return 10 * torch.log10(1.0 / mse)
 
 
@@ -16,6 +21,9 @@ def evaluate(model, dataloader, device):
     total_psnr = 0.0
     total_ssim = 0.0
     total_batches = 0
+
+    # reset metric
+    ssim_metric.reset()
 
     with torch.no_grad():
         # As a reminder = Iin: low-res input, IH: high-res target
@@ -38,7 +46,7 @@ def evaluate(model, dataloader, device):
             total_ssim += batch_ssim.item()
             total_batches += 1
 
-            # optional debug (only first batch)
+            # debug (only first batch)
             if batch_idx == 0:
                 print(f"Input (LR): {Iin.shape}")
                 print(f"Output (SR): {outputs.shape}")
@@ -48,5 +56,14 @@ def evaluate(model, dataloader, device):
     avg_ssim = total_ssim / total_batches
 
     print(f"\nEvaluation Results → PSNR: {avg_psnr:.2f} dB | SSIM: {avg_ssim:.4f}")
+
+    # -------------------------
+    # Save to CSV
+    # -------------------------
+    save_metrics_to_csv(
+        "results/eval_metrics.csv",
+        [avg_psnr, avg_ssim],
+        header=["PSNR", "SSIM"]
+    )
 
     return avg_psnr, avg_ssim

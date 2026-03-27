@@ -3,17 +3,27 @@
 ```project/
 │
 ├── data/
-│   ├── dataset.py        # Loads images and creates (LR, HR) pairs FINISHED
-│   └── dataloader.py     # Wraps dataset into PyTorch DataLoader FINISHED
+│   ├── dataset.py        # Loads images, creates LR/HR pairs, preprocessing
+│   └── dataloader.py     # Builds PyTorch DataLoader (batching, shuffle)
 │
 ├── models/
-│   └── model.py          # Bi-Channel CNN architecture FINISHED
+│   └── model.py          # Bi-Channel CNN + Basic CNN architectures
 │
 ├── training/
-│   ├── train.py          # Training loop (forward, loss, backprop) (NOT FINISHED!)
-│   └── test.py           # Evaluation / inference FINISHED (NOT FINISHED!)
+│   ├── train.py          # Training loop (MSE, PSNR, SSIM, CSV logging, best model saving)
+│   ├── evaluate.py       # Evaluation loop (PSNR, SSIM, CSV logging)
+│   └── inference.py      # Runs model on single image + saves LR/SR/HR outputs
 │
-└── main.py               # Entry point (run training or testing) TODO
+├── utils/
+│   └── logger.py         # CSV logging utility (train + eval metrics)
+│
+├── results/
+│   ├── train_metrics.csv # Training metrics per epoch (PSNR, SSIM, loss)
+│   ├── eval_metrics.csv  # Evaluation results
+│   ├── best_model.pth    # Best model checkpoint (based on PSNR)
+│   └── images/           # Saved inference outputs (lr.png, sr.png, hr.png)
+│
+└── main.py               # Entry point: train → save → evaluate
 ```
 ---
 # 🔄 Pipeline Overview
@@ -56,15 +66,22 @@
   - Computes loss (MSE)
   - Performs backpropagation
 
-- **test.py**
-  - Runs inference on new images
-  - Evaluates model performance
+- **evaluate.py**
+  - Runs evaluation on validation set
+  - Computes metrics (PSNR, SSIM)
+
+- **inference.py**
+  - Runs model on single image
+  - Saves generated outputs
 
 ---
+### 🛠 utils/
+- **logger.py**
+  - Utility for logging metrics to CSV files
 
 ### 🚀 main.py
 - Entry point of the project
-- Runs training or testing depending on configuration
+- Runs training, validation and testing depending on configuration
 
 ---
 
