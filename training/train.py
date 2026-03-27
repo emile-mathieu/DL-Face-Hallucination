@@ -2,19 +2,14 @@ import torch
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from utils.logger import save_metrics_to_csv
 
-
-# -------------------------
 # PSNR function (safe)
-# -------------------------
 def psnr(pred, target):
     mse = torch.mean((pred - target) ** 2)
     mse = torch.clamp(mse, min=1e-10)  # prevent log(0)
     return 10 * torch.log10(1.0 / mse)
 
 
-# -------------------------
 # Training function
-# -------------------------
 def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
     model.to(device)
 

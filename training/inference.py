@@ -30,7 +30,7 @@ def load_model(model_path, device):
 def test_single_image(dataloader, device, model_path="results/best_model.pth", save_dir="results/images"):
     os.makedirs(save_dir, exist_ok=True)
 
-    # 🔥 LOAD TRAINED MODEL
+    # LOAD TRAINED MODEL
     model = load_model(model_path, device)
 
     with torch.no_grad():

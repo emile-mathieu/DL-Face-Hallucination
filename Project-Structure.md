@@ -26,7 +26,7 @@
 └── main.py               # Entry point: train → save → evaluate
 ```
 ---
-# 🔄 Pipeline Overview
+# Pipeline Overview
 1. High-Res Image (IH)
 2. Blur + Downsample
 3. Low-Res Image (IL)
@@ -35,9 +35,9 @@
 6. High-Res Output (100×100)
 ---
 
-# 🧩 Components
+# Components
 
-### 📦 data/
+### data/
 - **dataset.py**
   - Loads images
   - Generates low-resolution inputs
@@ -48,7 +48,7 @@
 
 ---
 
-### 🧠 models/
+### models/
 - **model.py**
   - CNN feature extractor
   - Reconstruction branch
@@ -60,7 +60,7 @@
 
 ---
 
-### 🏋️ training/
+### training/
 - **train.py**
   - Handles training loop
   - Computes loss (MSE)
@@ -75,17 +75,17 @@
   - Saves generated outputs
 
 ---
-### 🛠 utils/
+### utils/
 - **logger.py**
   - Utility for logging metrics to CSV files
 
-### 🚀 main.py
+### main.py
 - Entry point of the project
 - Runs training, validation and testing depending on configuration
 
 ---
 
-# 📐 Input / Output
+# Input / Output
 
 | Type | Shape |
 |------|------|
@@ -94,7 +94,7 @@
 
 ---
 
-# ⚙️ Key Idea
+# Key Idea
 
 The model combines:
 - **Raw image information**

@@ -57,9 +57,7 @@ def evaluate(model, dataloader, device):
 
     print(f"\nEvaluation Results → PSNR: {avg_psnr:.2f} dB | SSIM: {avg_ssim:.4f}")
 
-    # -------------------------
     # Save to CSV
-    # -------------------------
     save_metrics_to_csv(
         "results/eval_metrics.csv",
         [avg_psnr, avg_ssim],
