@@ -20,7 +20,7 @@ class BiChannelCNN(nn.Module):
         super(BiChannelCNN, self).__init__()
 
         # Feature extractor
-        
+
         # 1st conv layer: input 3 channels (RGB), output 32 channels, kernel size 5
         self.conv1 = nn.Conv2d(3, 32, kernel_size=5)
 
@@ -90,12 +90,12 @@ class BiChannelCNN(nn.Module):
 
         return output
 
-# 1. CNN feature extractor
-# 2. Reconstruction branch
+    # 1. CNN feature extractor
+    # 2. Reconstruction branch
 
-# Iin     = (B, 3, 48, 48)
-# features= (B, 2048)
-# I_rec   = (B, 3, 100, 100)
+    # Iin     = (B, 3, 48, 48)
+    # features= (B, 2048)
+    # I_rec   = (B, 3, 100, 100)
 
 class BasicCNN(nn.Module):
     def __init__(self):
