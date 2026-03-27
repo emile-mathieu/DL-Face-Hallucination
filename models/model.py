@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 # 1. CNN feature extractor
@@ -19,25 +20,24 @@ class BiChannelCNN(nn.Module):
         super(BiChannelCNN, self).__init__()
 
         # Feature extractor
-
+        
         # 1st conv layer: input 3 channels (RGB), output 32 channels, kernel size 5
         self.conv1 = nn.Conv2d(3, 32, kernel_size=5)
 
-        # 2nd conv layer: input 32 channels, output 64 channels, kernel size 5
+        # 2nd conv layer: input 32 channels, output 64 channels, kernel size 3
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
 
-        # 3rd conv layer: input 64 channels, output 128 channels, kernel size 5
+        # 3rd conv layer: input 64 channels, output 128 channels, kernel size 3
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3)
 
         # Max pooling with kernel size 2 and stride 2
         self.pool = nn.MaxPool2d(2, 2)
 
-        # Fully connected layer to get 2048 features (Reconstruction)
+        # Flattened features: 128 * 4 * 4 = 2048
         # Numbers (Number of weights) = input channels * output channels * kernel size * kernel size: 
         # - 128 channels
         # - 4x4 because after 3 conv layers and 3 pool layers, the spatial size reduces from 48x48 to 4x4
         # - Output features = 2048 (as mentioned in the paper)
-        self.fc_recon = nn.Linear(128 * 4 * 4, 2048)
 
         # Image Generator
 
@@ -64,7 +64,7 @@ class BiChannelCNN(nn.Module):
         x = self.pool(torch.tanh(self.conv3(x)))
 
         ### NEED TO CONFIRM FOR THIS PART; We are inferring from the table right?
-        features = x.view(x.size(0), -1) 
+        features = torch.flatten(x, start_dim=1)
 
         # take the features and pass to both branches
         # Reconstruction branch that outputs an image of 100 x 100 with 3 channels
@@ -106,10 +106,10 @@ class BasicCNN(nn.Module):
         # 1st conv layer: input 3 channels (RGB), output 32 channels, kernel size 5
         self.conv1 = nn.Conv2d(3, 32, kernel_size=5)
 
-        # 2nd conv layer: input 32 channels, output 64 channels, kernel size 5
+        # 2nd conv layer: input 32 channels, output 64 channels, kernel size 3
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
 
-        # 3rd conv layer: input 64 channels, output 128 channels, kernel size 5
+        # 3rd conv layer: input 64 channels, output 128 channels, kernel size 3
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3)
 
         # Max pooling with kernel size 2 and stride 2
