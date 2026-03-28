@@ -35,8 +35,8 @@ def evaluate(model, dataloader, device):
             outputs = model(Iin)
 
             # convert [-1,1] → [0,1]
-            pred = (outputs + 1) / 2
-            target = (IH + 1) / 2
+            pred = torch.tanh(outputs)
+            target = torch.tanh(IH)
 
             # compute metrics
             batch_psnr = psnr(pred, target)
