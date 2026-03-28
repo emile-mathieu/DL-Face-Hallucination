@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from data.dataset import FaceDataset
+from data.dataset import FaceDataset, compute_mean_std
 from torch.utils.data import DataLoader
 
 from models.model import BiChannelCNN
@@ -20,40 +20,73 @@ def main():
     val_path = "data/val"
 
     batch_size = 32
-    num_epochs = 10
-    lr = 1e-3
+    num_epochs = 20
+    lr = 1e-5
+    min_lr = 1e-6
+    weight_decay = 0.0005
+    patience = 5
 
     # -------------------------
-    # 2. Data
+    # 2. Compute mean/std from training set
     # -------------------------
-    train_dataset = FaceDataset(train_path)
-    val_dataset = FaceDataset(val_path)
+    mean, std = compute_mean_std(train_path, image_size=(100, 100))
+    print("Training mean:", mean)
+    print("Training std :", std)
+
+    # -------------------------
+    # 3. Data
+    # -------------------------
+    train_dataset = FaceDataset(train_path, mean=mean, std=std)
+    val_dataset = FaceDataset(val_path, mean=mean, std=std)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # -------------------------
-    # 3. Model
+    # 4. Model
     # -------------------------
     model = BiChannelCNN().to(device)
 
     # -------------------------
-    # 4. Loss + Optimizer
+    # 5. Loss + Optimizer + Scheduler
     # -------------------------
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=lr,
+        momentum=0.9,
+        weight_decay=weight_decay
+    )
+
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.1,      # 1e-5 -> 1e-6
+        patience=patience,
+        min_lr=min_lr
+    )
 
     # -------------------------
-    # 5. Train
+    # 6. Train
     # -------------------------
     print("Starting training...\n")
-    train(optimizer, criterion, model, train_loader, device, num_epochs)
+    train(
+        optimizer=optimizer,
+        criterion=criterion,
+        model=model,
+        dataloader=train_loader,
+        device=device,
+        dataset=train_dataset,
+        num_epochs=num_epochs,
+        scheduler=scheduler
+    )
 
     # -------------------------
-    # 6. Evaluate
+    # 7. Validate 
     # -------------------------
     print("\nEvaluating on validation set...\n")
-    evaluate(model, val_loader, device)
+    evaluate(model, val_loader, device, val_dataset)
 
 
 # Entry point
