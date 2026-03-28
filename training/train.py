@@ -10,7 +10,7 @@ def psnr(pred, target):
 
 
 # Training function
-def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20):
+def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20, scheduler=None):
     model.to(device)
 
     # keep track of best PSNR to save best model for inference
@@ -64,6 +64,9 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
             optimizer.step()
 
         avg_loss = epoch_loss / len(dataloader)
+        if scheduler is not None:
+            scheduler.step(avg_loss)        
+        current_lr = optimizer.param_groups[0]["lr"]
         avg_psnr = epoch_psnr / len(dataloader)
         avg_ssim = epoch_ssim / len(dataloader)
 
@@ -72,14 +75,15 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
             f"Epoch [{epoch+1}/{num_epochs}] | "
             f"Loss: {avg_loss:.4f} | "
             f"PSNR: {avg_psnr:.2f} dB | "
-            f"SSIM: {avg_ssim:.4f}"
+            f"SSIM: {avg_ssim:.4f} | "
+            f"LR: {current_lr:.1e}"
         )
-
+        
         # save to CSV
         save_metrics_to_csv(
             "results/train_metrics.csv",
-            [epoch + 1, avg_loss, avg_psnr, avg_ssim],
-            header=["Epoch", "Loss", "PSNR", "SSIM"]
+            [epoch + 1, avg_loss, avg_psnr, avg_ssim, current_lr],
+            header=["Epoch", "Loss", "PSNR", "SSIM", "LR"]
         )
 
         # save best model based on lowest training loss
