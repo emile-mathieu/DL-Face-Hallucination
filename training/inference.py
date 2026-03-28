@@ -3,14 +3,9 @@ import os
 import matplotlib.pyplot as plt
 from models.model import BiChannelCNN
 
-
-def denormalize(img):
-    return (img + 1) / 2  # [-1,1] → [0,1]
-
-
 def save_image(tensor, path):
-    img = tensor.cpu().permute(1, 2, 0).numpy()
-    plt.imsave(path, img)
+    img = tensor.detach().cpu().permute(1, 2, 0).numpy()
+    plt.imsave(path, np.clip(img, 0.0, 1.0))
 
 
 def load_model(model_path, device):
@@ -27,9 +22,15 @@ def load_model(model_path, device):
     return model
 
 
-def test_single_image(dataloader, device, model_path="results/best_model.pth", save_dir="results/images"):
+def test_single_image(
+    dataloader,
+    device,
+    dataset,
+    model_path="results/best_model.pth",
+    save_dir="results/images"
+):
     os.makedirs(save_dir, exist_ok=True)
-    
+
     model = load_model(model_path, device)
 
     with torch.no_grad():
@@ -40,10 +41,10 @@ def test_single_image(dataloader, device, model_path="results/best_model.pth", s
 
         outputs = model(Iin)
 
-        # take first image
-        lr = denormalize(Iin[0])
-        sr = denormalize(outputs[0])
-        hr = denormalize(IH[0])
+        # take 1st image, denormalize already defined in dataset.py 
+        lr = dataset.denormalize(Iin[0])
+        sr = dataset.denormalize(outputs[0])
+        hr = dataset.denormalize(IH[0])
 
         save_image(lr, os.path.join(save_dir, "lr.png"))
         save_image(sr, os.path.join(save_dir, "sr.png"))
