@@ -10,12 +10,11 @@ def psnr(pred, target):
 
 
 # Training function
-def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
+def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20):
     model.to(device)
 
     # keep track of best PSNR to save best model for inference
-    best_psnr = 0.0 
-    # SSIM metric
+    best_psnr = 0.0
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
     for epoch in range(num_epochs):
@@ -25,7 +24,6 @@ def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
         epoch_psnr = 0.0
         epoch_ssim = 0.0
 
-        # reset SSIM each epoch
         ssim_metric.reset()
 
         for batch_idx, (Iin, IH) in enumerate(dataloader):
@@ -34,7 +32,6 @@ def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
 
             optimizer.zero_grad()
 
-            # forward pass
             outputs = model(Iin)
 
             # debug (only first batch)
@@ -46,9 +43,9 @@ def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
             loss = criterion(outputs, IH)
             epoch_loss += loss.item()
 
-            # convert [-1,1] → [0,1] for metrics
-            pred = (outputs + 1) / 2
-            target = (IH + 1) / 2
+            # denormalize then compare
+            pred = dataset.denormalize(outputs)
+            target = dataset.denormalize(IH)
 
             # PSNR
             batch_psnr = psnr(pred, target)
@@ -63,10 +60,9 @@ def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
 
             # gradient clipping (optional but safe)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
+            
             optimizer.step()
 
-        # averages
         avg_loss = epoch_loss / len(dataloader)
         avg_psnr = epoch_psnr / len(dataloader)
         avg_ssim = epoch_ssim / len(dataloader)
@@ -86,12 +82,12 @@ def train(optimizer, criterion, model, dataloader, device, num_epochs=10):
             header=["Epoch", "Loss", "PSNR", "SSIM"]
         )
 
-        # save best model based on PSNR
-        if avg_psnr > best_psnr:
-            best_psnr = avg_psnr
+        # save best model based on lowest training loss
+        if avg_loss < best_loss:
+            best_loss = avg_loss
             torch.save({
-            "model_state": model.state_dict(),
-            "psnr": best_psnr,
-            "epoch": epoch + 1
-        }, "results/best_model.pth")
-            print(f"New best model saved with PSNR: {best_psnr:.2f} dB")
+                "model_state": model.state_dict(),
+                "loss": best_loss,
+                "epoch": epoch + 1
+            }, "results/best_model.pth")
+            print(f"New best model saved with training loss: {best_loss:.4f}")
