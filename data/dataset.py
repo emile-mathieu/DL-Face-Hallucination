@@ -116,18 +116,42 @@ class FaceDataset(Dataset):
         )
 
         # Randomly apply either Gaussian blur or motion blur to simulate real-world degradation
-        if random.random() > 0.5:
+        if random.random() < 0.5:
             # Gaussian blur
-            ksize = random.choice([3, 5, 7])
-            small = cv2.GaussianBlur(small, (ksize, ksize), 0)
+            sigma = random.uniform(0, 7)
+        
+            # If sigma is extremely close to 0, leave image unchanged
+            if sigma > 1e-6:
+                small = cv2.GaussianBlur(small, (0, 0), sigmaX=sigma, sigmaY=sigma)
+        
         else:
             # Motion blur
-            kernel_size = random.randint(3, 7)
-            kernel = np.zeros((kernel_size, kernel_size), dtype=np.float32)
-            kernel[(kernel_size - 1) // 2, :] = 1.0
-            kernel /= kernel_size
-            small = cv2.filter2D(small, -1, kernel)
-
+            length = random.randint(0, 11)
+            theta = random.uniform(-np.pi, np.pi)
+        
+            # If length is 0 or 1, leave image unchanged / nearly unchanged
+            if length > 1:
+                kernel = np.zeros((length, length), dtype=np.float32)
+                center = (length - 1) / 2.0
+        
+                x0 = center - (length - 1) / 2.0 * np.cos(theta)
+                y0 = center - (length - 1) / 2.0 * np.sin(theta)
+                x1 = center + (length - 1) / 2.0 * np.cos(theta)
+                y1 = center + (length - 1) / 2.0 * np.sin(theta)
+        
+                cv2.line(
+                    kernel,
+                    (int(round(x0)), int(round(y0))),
+                    (int(round(x1)), int(round(y1))),
+                    1,
+                    thickness=1
+                )
+        
+                kernel_sum = kernel.sum()
+                if kernel_sum > 0:
+                    kernel /= kernel_sum
+                    small = cv2.filter2D(small, -1, kernel)
+        
         return small.astype(np.float32)
 
     # Preprocess (resize to 48x48)
