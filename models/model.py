@@ -15,10 +15,9 @@ import torch.nn as nn
 # IH      = (B, 3, 100, 100)
 
 class BiChannelCNN(nn.Module):
-    
     def __init__(self):
         super(BiChannelCNN, self).__init__()
-
+        
         # Feature extractor
 
         # 1st conv layer: input 3 channels (RGB), output 32 channels, kernel size 5
@@ -53,6 +52,17 @@ class BiChannelCNN(nn.Module):
         # 2nd layer: input 100 features, outputs 1 value
         self.fc2_2 = nn.Linear(100, 1)
 
+        # initialize all conv and linear weights with N(0, 0.001^2)
+        # and all biases to 0
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.normal_(m.weight, mean=0.0, std=0.001)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+
     def forward(self, x):
 
         # for skip connection
@@ -62,8 +72,6 @@ class BiChannelCNN(nn.Module):
         x = self.pool(torch.tanh(self.conv1(x)))
         x = self.pool(torch.tanh(self.conv2(x)))
         x = self.pool(torch.tanh(self.conv3(x)))
-
-        ### NEED TO CONFIRM FOR THIS PART; We are inferring from the table right?
         features = torch.flatten(x, start_dim=1)
 
         # take the features and pass to both branches
@@ -82,20 +90,12 @@ class BiChannelCNN(nn.Module):
             input_image,
             size=(100, 100),
             mode="bicubic",
-            align_corners=False
+            align_corners=False,
         )
 
         # formula for blending
         output = alpha * i_up + (1 - alpha) * i_rec
-
         return output
-
-    # 1. CNN feature extractor
-    # 2. Reconstruction branch
-
-    # Iin     = (B, 3, 48, 48)
-    # features= (B, 2048)
-    # I_rec   = (B, 3, 100, 100)
 
 class BasicCNN(nn.Module):
     def __init__(self):
