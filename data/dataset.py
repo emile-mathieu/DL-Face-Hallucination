@@ -105,16 +105,6 @@ class FaceDataset(Dataset):
         """
         h, w, _ = img.shape
 
-        # random downsample factor (2 to 5)
-        scale = random.randint(2, 5)
-
-        # downsample (FIX: prevent 0 size + better interpolation)
-        small = cv2.resize(
-            img,
-            (max(1, w // scale), max(1, h // scale)),
-            interpolation=cv2.INTER_CUBIC
-        )
-
         # Randomly apply either Gaussian blur or motion blur to simulate real-world degradation
         if random.random() < 0.5:
             # Gaussian blur
@@ -151,6 +141,16 @@ class FaceDataset(Dataset):
                 if kernel_sum > 0:
                     kernel /= kernel_sum
                     small = cv2.filter2D(small, -1, kernel)
+                    
+        # random downsample factor (2 to 5)
+        scale = random.randint(2, 5)
+        
+        # downsample (FIX: prevent 0 size + better interpolation)
+        small = cv2.resize(
+            img,
+            (max(1, w // scale), max(1, h // scale)),
+            interpolation=cv2.INTER_CUBIC
+        )
         
         return small.astype(np.float32)
 
