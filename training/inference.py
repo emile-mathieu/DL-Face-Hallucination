@@ -1,11 +1,20 @@
-import torch
 import os
+import numpy as np
+import torch
 import matplotlib.pyplot as plt
 from models.model import BiChannelCNN
 
+
+def ensure_dir(path):
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+
 def save_image(tensor, path):
+    ensure_dir(os.path.dirname(path))
     img = tensor.detach().cpu().permute(1, 2, 0).numpy()
-    plt.imsave(path, np.clip(img, 0.0, 1.0))
+    img = np.clip(img, 0.0, 1.0)
+    plt.imsave(path, img)
 
 
 def load_model(model_path, device):
@@ -13,8 +22,13 @@ def load_model(model_path, device):
 
     checkpoint = torch.load(model_path, map_location=device)
 
-    if isinstance(checkpoint, dict) and "model_state" in checkpoint:
-        model.load_state_dict(checkpoint["model_state"])
+    if isinstance(checkpoint, dict):
+        if "model_state" in checkpoint:
+            model.load_state_dict(checkpoint["model_state"])
+        elif "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            model.load_state_dict(checkpoint)
     else:
         model.load_state_dict(checkpoint)
 
@@ -25,11 +39,15 @@ def load_model(model_path, device):
 def test_single_image(
     dataloader,
     device,
-    dataset,
-    model_path="results/best_model.pth",
-    save_dir="results/images"
+    dataset=None,
+    model_path="checkpoints/best_bichannel.pth",
+    save_dir="results/images",
+    image_index_in_batch=0,
 ):
-    os.makedirs(save_dir, exist_ok=True)
+    ensure_dir(save_dir)
+
+    if dataset is None:
+        dataset = getattr(dataloader, "dataset", None)
 
     model = load_model(model_path, device)
 
@@ -41,10 +59,21 @@ def test_single_image(
 
         outputs = model(Iin)
 
-        # take 1st image, denormalize already defined in dataset.py 
-        lr = dataset.denormalize(Iin[0])
-        sr = dataset.denormalize(outputs[0])
-        hr = dataset.denormalize(IH[0])
+        idx = image_index_in_batch
+
+        if idx >= Iin.shape[0]:
+            raise IndexError(
+                f"image_index_in_batch={idx} is out of range for batch size {Iin.shape[0]}"
+            )
+
+        if dataset is not None and hasattr(dataset, "denormalize"):
+            lr = dataset.denormalize(Iin[idx])
+            sr = dataset.denormalize(outputs[idx])
+            hr = dataset.denormalize(IH[idx])
+        else:
+            lr = Iin[idx]
+            sr = outputs[idx]
+            hr = IH[idx]
 
         save_image(lr, os.path.join(save_dir, "lr.png"))
         save_image(sr, os.path.join(save_dir, "sr.png"))

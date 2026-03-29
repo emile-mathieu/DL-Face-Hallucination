@@ -93,6 +93,8 @@ class BiChannelCNN(nn.Module):
             align_corners=False,
         )
 
+        print("alpha mean:", alpha.mean().item())
+
         # formula for blending
         output = alpha * i_up + (1 - alpha) * i_rec
         return output

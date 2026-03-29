@@ -14,11 +14,11 @@ dependencies:
   - scipy
   - matplotlib
   - pandas
+  - torchmetrics
 
   # ML / DL
   - pytorch
   - torchvision
-  - cudatoolkit=12.1   # match your cluster CUDA version
 
   # Image processing
   - pillow
