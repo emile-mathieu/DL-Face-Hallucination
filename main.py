@@ -398,13 +398,15 @@ def main():
         train_dataset,
         batch_size=bi_cfg["batch_size"],
         shuffle=True,
-        num_workers=0,
+        num_workers=4,
+        pin_memory=True
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=bi_cfg["batch_size"],
         shuffle=False,
-        num_workers=0,
+        num_workers=4,
+        pin_memory=True
     )
 
     if not (bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path)):
