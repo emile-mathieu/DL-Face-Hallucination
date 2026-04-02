@@ -1,5 +1,4 @@
 import torch
-from torchmetrics.image import StructuralSimilarityIndexMeasure
 from utils.logger import save_metrics_to_csv
 
 # ============================================================
@@ -57,11 +56,11 @@ def evaluate_validation(model, dataloader, device, criterion):
     with torch.no_grad():
         for Iin, IH, mean_b, std_b in dataloader:
             Iin, IH = Iin.to(device).float(), IH.to(device).float()
-            out, _   = model(Iin)
+            outputs, _   = model(Iin)
             total_loss += criterion(outputs, IH).item()
-            for b in range(out.shape[0]):
-                pred = denormalize_per_image(out[b], mean_b[b].numpy(), std_b[b].numpy())
-                target = denormalize_per_image(ih[b],  mean_b[b].numpy(), std_b[b].numpy())
+            for b in range(outputs.shape[0]):
+                pred = denormalize_per_image(outputs[b], mean_b[b].numpy(), std_b[b].numpy())
+                target = denormalize_per_image(IH[b],  mean_b[b].numpy(), std_b[b].numpy())
                 total_psnr += compute_psnr(pred, target)
                 total_ssim += compute_ssim(pred, target)
                 n += 1
@@ -71,11 +70,6 @@ def evaluate_validation(model, dataloader, device, criterion):
 # Training function
 def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20, scheduler=None):
     model.to(device)
-    criterion  = nn.MSELoss()
-    optimizer  = optim.SGD(model.parameters(), lr=LEARNING_RATE,
-                            momentum=MOMENTUM, weight_decay=WEIGHT_DECAY)
-    scheduler  = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.1, patience=PATIENCE, min_lr=MIN_LR)
 
     for epoch in range(num_epochs):
         model.train()
@@ -84,8 +78,6 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
         epoch_psnr = 0.0
         epoch_ssim = 0.0
         n = 0.0
-
-        ssim_metric.reset()
 
         for batch_idx, (Iin, IH, mean_b, std_b) in enumerate(dataloader):
             Iin = Iin.to(device).float()
@@ -107,10 +99,10 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
 
             # denormalize then compare PSNR and SSIM (in the range 0,1)
             with torch.no_grad():
-                for b in range(out.shape[0]):
-                    pred = denormalize_per_image(out[b].detach(),
+                for b in range(outputs.shape[0]):
+                    pred = denormalize_per_image(outputs[b].detach(),
                                               mean_b[b].numpy(), std_b[b].numpy())
-                    target = denormalize_per_image(ih[b],
+                    target = denormalize_per_image(IH[b],
                                               mean_b[b].numpy(), std_b[b].numpy())
                     epoch_psnr += compute_psnr(pred, target)
                     epoch_ssim += compute_ssim(pred, target)
@@ -118,7 +110,7 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
 
             #debug 
             if epoch == start_epoch and batch_idx == 0:
-                print(f"First batch — In:{iin.shape} Out:{out.shape} Target:{ih.shape}")
+                print(f"First batch — In:{Iin.shape} Out:{outputs.shape} Target:{IH.shape}")
             if batch_idx == 0:
                 print(f"[Epoch {epoch+1}] alpha mean={alpha.mean().item():.4f} "
                       f"min={alpha.min().item():.4f} max={alpha.max().item():.4f}")
