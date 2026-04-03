@@ -159,8 +159,6 @@ def build_sfh(sfh_cfg):
 
 def run_test_dataset(
     bichannel_model,
-    mean,
-    std,
     device,
     train_dir,
     test_dir,
@@ -355,7 +353,6 @@ def run_test_dataset(
     print(f"Evaluation CSV: {eval_csv}")
     print(f"Saved images folder: {images_dir}")
 
-
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -377,22 +374,19 @@ def main():
     hr_size = tuple(sc2_cfg["hr_size"])
     bichannel_ckpt_path = os.path.join(checkpoints_dir, bi_cfg["checkpoint_name"])
 
+    # 1. Initialize Model
     model = BiChannelCNN().to(device)
 
-    mean = None
-    std = None
-
+    # 2. Load checkpoint if it exists
+    # Note: mean/std returned here might be None because we are using the new per-image logic,
+    # but we keep the variables to avoid breaking the load function signature.
     if bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path):
-        model, mean, std = load_bichannel_checkpoint(model, bichannel_ckpt_path, device)
+        model, _, _ = load_bichannel_checkpoint(model, bichannel_ckpt_path, device)
 
-    if mean is None or std is None:
-        print("Computing train-set mean/std...")
-        mean, std = compute_mean_std(train_path, image_size=hr_size)
-        print(f"Mean: {mean}")
-        print(f"Std: {std}")
-
-    train_dataset = FaceDataset(train_path, mean=mean, std=std)
-    val_dataset = FaceDataset(val_path, mean=mean, std=std)
+    # 3. Initialize Datasets
+    # Removed mean=mean, std=std because FaceDataset now calculates them internally per image
+    train_dataset = FaceDataset(train_path)
+    val_dataset = FaceDataset(val_path)
 
     train_loader = DataLoader(
         train_dataset,
@@ -409,8 +403,9 @@ def main():
         pin_memory=True
     )
 
+    # 4. Training Logic
     if not (bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path)):
-        print("Training BiChannel CNN...")
+        print("Training BiChannel CNN with per-image normalization...")
 
         criterion = nn.MSELoss()
         optimizer = optim.SGD(
@@ -427,25 +422,29 @@ def main():
             min_lr=bi_cfg["min_lr"],
         )
 
+        # The updated train function expects 4 items from the loader
         train(
-            model,
-            train_loader,
-            val_loader,
-            optimizer,
-            criterion,
-            device,
-            bi_cfg["num_epochs"],
-            scheduler,
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            num_epochs=bi_cfg["num_epochs"],
+            scheduler=scheduler,
+            eps=1e-6 # Matching your function signature
         )
 
         if bi_cfg["save_after_train"]:
-            save_bichannel_checkpoint(model, mean, std, bichannel_ckpt_path)
+            # We pass None for global mean/std since we use per-image stats now
+            save_bichannel_checkpoint(model, None, None, bichannel_ckpt_path)
 
+    # 5. Evaluation
     print("\nRunning test dataset evaluation...")
     run_test_dataset(
         bichannel_model=model,
-        mean=mean,
-        std=std,
+        # run_test_dataset may still need to handle per-image stats 
+        # inside its own implementation using FixedTestFaceDataset
         device=device,
         train_dir=train_path,
         test_dir=test_path,
@@ -455,6 +454,18 @@ def main():
         save_first_n=test_cfg["save_first_n"],
     )
 
+
+    print("\nRunning test dataset evaluation...")
+    run_test_dataset(
+        bichannel_model=model,
+        device=device,
+        train_dir=train_path,
+        test_dir=test_path,
+        sigmas=test_cfg["sigmas"],
+        classical_train_max_samples=test_cfg["classical_train_max_samples"],
+        test_max_samples=test_cfg["test_max_samples"],
+        save_first_n=test_cfg["save_first_n"],
+    )
 
 if __name__ == "__main__":
     main()
