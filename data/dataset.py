@@ -140,7 +140,7 @@ class FixedTestFaceDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        #img    = celeba_crop(Image.open(self.image_paths[idx]).convert("RGB"))- changed this to comment to not crop yet 
+        img    = Image.open(self.image_paths[idx]).convert("RGB")
         hr_img = img.resize(self.hr_size, Image.BICUBIC) #resize to 100x100 by bicubic method
         IH     = np.array(hr_img).astype(np.float32) / 255.0 #get the 100x100 image with pixels range (0,1) by dividing by 255 
 
