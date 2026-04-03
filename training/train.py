@@ -2,6 +2,8 @@ import torch
 from utils.logger import save_metrics_to_csv
 import torch.nn.functional as F
 from pathlib import Path
+from data.dataset import denormalize_per_image
+from training.inference import save_checkpoint, load_checkpoint 
 
 # ============================================================
 # Metrics  (Y-channel or RGB, toggled by METRIC_CHANNEL)
@@ -70,7 +72,7 @@ def evaluate_validation(model, dataloader, device, criterion):
 
 
 # Training function
-def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20, scheduler=None):
+def train(optimizer, criterion, model, dataloader, val_loader, device, dataset, num_epochs, scheduler=None, resume_checkpoint: Path = None):
     model.to(device)
 
     start_epoch = 0
