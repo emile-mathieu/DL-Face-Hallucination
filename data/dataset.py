@@ -1,6 +1,7 @@
 import os, torch, random, cv2, math, numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from PIL import Image
+from typing import List, Tuple
 
 #Definitions: 
 #IH: high-resolution ground truth (100×100)
@@ -116,6 +117,65 @@ class FaceDataset(Dataset):
     @staticmethod
     def motion_blur_kernel(length: int, theta: float) -> np.ndarray:
         return _motion_blur_kernel(length, theta)
+
+#Preprocessing done for test dataset in a different way: 
+class FixedTestFaceDataset(Dataset):
+    def __init__(self, image_paths: List[str], blur_type: str = "gaussian",
+                 gaussian_sigma: float = None, motion_length: int = None,
+                 base_seed: int = 42):
+        self.image_paths    = image_paths
+        self.hr_size        = HR_SIZE
+        self.fixed_lr_size  = TEST_FIXED_LR_SIZE
+        self.nn_input_size  = TEST_NN_INPUT_SIZE
+        self.blur_type      = blur_type
+        self.gaussian_sigma = gaussian_sigma
+        self.motion_length  = motion_length
+        self.base_seed      = base_seed
+        if blur_type == "gaussian" and gaussian_sigma is None:
+            raise ValueError("gaussian_sigma required")
+        if blur_type == "motion" and motion_length is None:
+            raise ValueError("motion_length required")
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        #img    = celeba_crop(Image.open(self.image_paths[idx]).convert("RGB"))- changed this to comment to not crop yet 
+        hr_img = img.resize(self.hr_size, Image.BICUBIC) #resize to 100x100 by bicubic method
+        IH     = np.array(hr_img).astype(np.float32) / 255.0 #get the 100x100 image with pixels range (0,1) by dividing by 255 
+
+        fixed_lr = self._fixed_test_preprocessing(img, idx) #see the function _fixed_test_preprocesing below: for single type of blur with single value on all the test images, then resize to 50x50
+        #then resize to 48x48 to enter the bichannel CNN:
+        Iin = cv2.resize(fixed_lr, self.nn_input_size,
+                         interpolation=cv2.INTER_CUBIC).astype(np.float32)
+
+        Iin_norm, mean, std = normalize_per_image(Iin) #Z-normalise and tanh the Iin to get Iin_norm
+        IH_norm = np.tanh((IH - mean) / std).astype(np.float32) #get IH Z-normalised and tanh done
+
+        #return the Iin_norm, IH_norm, mean, std
+        return (torch.from_numpy(Iin_norm).permute(2, 0, 1).float(),
+                torch.from_numpy(IH_norm).permute(2, 0, 1).float(),
+                torch.tensor(mean, dtype=torch.float32),
+                torch.tensor(std,  dtype=torch.float32))
+
+    def _fixed_test_preprocessing(self, pil_img: Image.Image, idx: int) -> np.ndarray:
+        img_100 = np.array(pil_img.resize(self.hr_size, Image.BICUBIC)
+                           ).astype(np.float32) / 255.0
+        if self.blur_type == "gaussian":
+            img_blur = cv2.GaussianBlur(img_100, (0, 0),
+                                        sigmaX=self.gaussian_sigma,
+                                        sigmaY=self.gaussian_sigma)
+        else:
+            theta    = random.Random(self.base_seed + idx
+                                     ).uniform(-math.pi, math.pi)
+            img_blur = cv2.filter2D(img_100, -1,
+                                    _motion_blur_kernel(self.motion_length, theta))
+        return cv2.resize(img_blur, self.fixed_lr_size,
+                          interpolation=cv2.INTER_CUBIC).astype(np.float32)
+
+
+
+
 
 
 
