@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader
+from data.dataset import denormalize_per_image
 
 #use this function for the save_sample_outputs
 def save_image(tensor: torch.Tensor, path: Path):
