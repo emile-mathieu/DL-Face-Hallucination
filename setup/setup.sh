@@ -1,15 +1,25 @@
 #!/bin/bash
 
+set -e
+
 eval "$(conda shell.bash hook)"
 
-conda env create -f environment.yml
+ENV_NAME="DL2"
 
-set -e 
-trap 'echo "Error occurred during copy"; exit 1' ERR
-# i tried to expose my folder in the environment by setting permissions
-# hopefully it works so you can just directly copy the folder over in the environment
-# if this fails, then you need to copy the data source over yourself
-parent_dir="$(dirname "$(pwd)")"
-my_data_dir=/home/msai/ruijiane001/AI6301/Face-Hallucination/Deep-Learning-Face-Hallucination/celeba
+echo "Checking environment..."
 
-cp -r my_data_dir parent_dir
+if conda env list | grep -q "$ENV_NAME"; then
+    echo "Env $ENV_NAME already exists. Updating..."
+    conda env update -f environment.yml --prune
+else
+    echo "Creating env $ENV_NAME..."
+    conda env create -f environment.yml
+fi
+
+echo "Activating environment..."
+conda activate $ENV_NAME
+
+echo "Preparing dataset..."
+python setup_data.py
+
+echo "Setup complete."

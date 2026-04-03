@@ -1,168 +1,191 @@
+import os
 import torch
 from utils.logger import save_metrics_to_csv
-import torch.nn.functional as F
-from pathlib import Path
-from data.dataset import denormalize_per_image
-from training.inference import save_checkpoint, load_checkpoint 
-
-# ============================================================
-# Metrics  (Y-channel or RGB, toggled by METRIC_CHANNEL)
-# ============================================================
-def _to_y(t: torch.Tensor) -> torch.Tensor:
-    """CHW or 1CHW RGB [0,1] → 1×1×H×W Y-channel."""
-    if t.ndim == 3:
-        t = t.unsqueeze(0)
-    r, g, b = t[:, 0:1], t[:, 1:2], t[:, 2:3]
-    return (0.257 * r + 0.504 * g + 0.098 * b + 16.0 / 255.0).clamp(0, 1)
 
 
-def _ssim_kernel(channels: int, device, dtype) -> torch.Tensor:
-    coords = torch.arange(11, dtype=torch.float32) - 5
-    g = torch.exp(-(coords ** 2) / (2 * 1.5 ** 2))
-    g /= g.sum()
-    k = g.unsqueeze(0) * g.unsqueeze(1)
-    k = k / k.sum()
-    return k.unsqueeze(0).unsqueeze(0).repeat(channels, 1, 1, 1).to(device=device, dtype=dtype)
+def psnr(pred, target):
+    mse = torch.mean((pred - target) ** 2)
+    mse = torch.clamp(mse, min=1e-10)
+    return 10 * torch.log10(1.0 / mse)
 
 
-def compute_psnr(pred: torch.Tensor, target: torch.Tensor) -> float:
-    if METRIC_CHANNEL == "y":
-        pred, target = _to_y(pred), _to_y(target)
-    mse = torch.mean((pred - target) ** 2).clamp(min=1e-10)
-    return (10 * torch.log10(1.0 / mse)).item()
+def ensure_dir(path):
+    if path:
+        os.makedirs(path, exist_ok=True)
 
 
-def compute_ssim(pred: torch.Tensor, target: torch.Tensor) -> float:
-    if METRIC_CHANNEL == "y":
-        pred, target = _to_y(pred), _to_y(target)
-    if pred.ndim == 3:
-        pred, target = pred.unsqueeze(0), target.unsqueeze(0)
-    C1, C2 = 0.01 ** 2, 0.03 ** 2
-    ch  = pred.shape[1]
-    k   = _ssim_kernel(ch, pred.device, pred.dtype)
-    pad = 5
-    mu1  = F.conv2d(pred,   k, padding=pad, groups=ch)
-    mu2  = F.conv2d(target, k, padding=pad, groups=ch)
-    s1   = F.conv2d(pred*pred,     k, padding=pad, groups=ch) - mu1**2
-    s2   = F.conv2d(target*target, k, padding=pad, groups=ch) - mu2**2
-    s12  = F.conv2d(pred*target,   k, padding=pad, groups=ch) - mu1*mu2
-    num  = (2*mu1*mu2 + C1) * (2*s12 + C2)
-    den  = (mu1**2 + mu2**2 + C1) * (s1 + s2 + C2)
-    return (num / (den + 1e-12)).mean().item()
+def denormalize_batch(batch, dataset):
+    """
+    Uses dataset.denormalize() if available.
+    Otherwise returns the batch unchanged.
+    """
+    if dataset is not None and hasattr(dataset, "denormalize"):
+        return dataset.denormalize(batch)
+    return batch
 
 
-# ============================================================
-# Train / Validate
-# ============================================================
-def evaluate_validation(model, dataloader, device, criterion):
+def evaluate_one_epoch(model, dataloader, criterion, device, dataset=None):
     model.eval()
-    total_loss = total_psnr = total_ssim = n = 0
+
+    ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
+
+    total_loss = 0.0
+    total_psnr = 0.0
+    total_ssim = 0.0
+    total_batches = 0
+
     with torch.no_grad():
-        for Iin, IH, mean_b, std_b in dataloader:
-            Iin, IH = Iin.to(device).float(), IH.to(device).float()
-            outputs, _   = model(Iin)
-            total_loss += criterion(outputs, IH).item()
-            for b in range(outputs.shape[0]):
-                pred = denormalize_per_image(outputs[b], mean_b[b].numpy(), std_b[b].numpy())
-                target = denormalize_per_image(IH[b],  mean_b[b].numpy(), std_b[b].numpy())
-                total_psnr += compute_psnr(pred, target)
-                total_ssim += compute_ssim(pred, target)
-                n += 1
-    return total_loss / len(dataloader), total_psnr / n, total_ssim / n
+        for batch_idx, (Iin, IH) in enumerate(dataloader):
+            Iin = Iin.to(device).float()
+            IH = IH.to(device).float()
+
+            outputs = model(Iin)
+            loss = criterion(outputs, IH)
+
+            pred = denormalize_batch(outputs, dataset)
+            target = denormalize_batch(IH, dataset)
+
+            batch_psnr = psnr(pred, target)
+            batch_ssim = ssim_metric(pred, target)
+
+            total_loss += loss.item()
+            total_psnr += batch_psnr.item()
+            total_ssim += batch_ssim.item()
+            total_batches += 1
+
+            if batch_idx == 0:
+                print(
+                    f"[VAL] Input: {Iin.shape} | Output: {outputs.shape} | Target: {IH.shape}"
+                )
+
+    if total_batches == 0:
+        return 0.0, 0.0, 0.0
+
+    avg_loss = total_loss / total_batches
+    avg_psnr = total_psnr / total_batches
+    avg_ssim = total_ssim / total_batches
+
+    return avg_loss, avg_psnr, avg_ssim
 
 
-# Training function
-def train(optimizer, criterion, model, dataloader, val_loader, device, dataset, num_epochs, scheduler=None, resume_checkpoint: Path = None):
+def train(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    criterion,
+    device,
+    num_epochs=20,
+    scheduler=None,
+    train_metrics_csv_path="results/train_metrics.csv",
+    val_metrics_csv_path="results/val_metrics.csv",
+    best_model_path="checkpoints/best_bichannel.pth",
+):
+
+    ensure_dir(os.path.dirname(train_metrics_csv_path))
+    ensure_dir(os.path.dirname(val_metrics_csv_path))
+    ensure_dir(os.path.dirname(best_model_path))
+
     model.to(device)
 
-    start_epoch = 0
-    best_val_loss  = float("inf")
-    best_model_path = RESULTS_DIR / "best_model.pth"
-    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    train_dataset = getattr(train_loader, "dataset", None)
+    val_dataset = getattr(val_loader, "dataset", None)
 
-    #checkpoint 
-    if resume_checkpoint and Path(resume_checkpoint).exists():
-        start_epoch, best_val_loss = load_checkpoint(
-            resume_checkpoint, model, optimizer, scheduler, device)
-        print(f"Resumed from epoch {start_epoch}, best_val_loss={best_val_loss:.4f}")
+    best_val_loss = float("inf")
 
-    for epoch in range(start_epoch, NUM_EPOCHS):
+    for epoch in range(num_epochs):
         model.train()
+
+        train_ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
         epoch_loss = 0.0
         epoch_psnr = 0.0
         epoch_ssim = 0.0
-        n = 0.0
+        total_batches = 0
 
-        for batch_idx, (Iin, IH, mean_b, std_b) in enumerate(dataloader):
+        for batch_idx, (Iin, IH) in enumerate(train_loader):
             Iin = Iin.to(device).float()
             IH = IH.to(device).float()
 
             optimizer.zero_grad()
 
-            outputs, alpha = model(Iin)
+            outputs = model(Iin)
 
-            # loss (MSE)
+            if epoch == 0 and batch_idx == 0:
+                print(
+                    f"[TRAIN] Input: {Iin.shape} | Output: {outputs.shape} | Target: {IH.shape}"
+                )
+
             loss = criterion(outputs, IH)
-            
-            # backward
             loss.backward()
-            # gradient clipping (optional but safe), if want to gradient clipping can use 'torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)'
-            
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+
+            pred = denormalize_batch(outputs, train_dataset)
+            target = denormalize_batch(IH, train_dataset)
+
+            batch_psnr = psnr(pred, target)
+            batch_ssim = train_ssim_metric(pred, target)
+
             epoch_loss += loss.item()
+            epoch_psnr += batch_psnr.item()
+            epoch_ssim += batch_ssim.item()
+            total_batches += 1
 
-            # denormalize then compare PSNR and SSIM (in the range 0,1)
-            with torch.no_grad():
-                for b in range(outputs.shape[0]):
-                    pred = denormalize_per_image(outputs[b].detach(),
-                                              mean_b[b].numpy(), std_b[b].numpy())
-                    target = denormalize_per_image(IH[b],
-                                              mean_b[b].numpy(), std_b[b].numpy())
-                    epoch_psnr += compute_psnr(pred, target)
-                    epoch_ssim += compute_ssim(pred, target)
-                    n += 1
+        if total_batches == 0:
+            raise ValueError("Training loader is empty.")
 
-            #debug 
-            if epoch == start_epoch and batch_idx == 0:
-                print(f"First batch — In:{Iin.shape} Out:{outputs.shape} Target:{IH.shape}")
-            if batch_idx == 0:
-                print(f"[Epoch {epoch+1}] alpha mean={alpha.mean().item():.4f} "
-                      f"min={alpha.min().item():.4f} max={alpha.max().item():.4f}")
+        train_loss = epoch_loss / total_batches
+        train_psnr = epoch_psnr / total_batches
+        train_ssim = epoch_ssim / total_batches
 
-        train_loss = epoch_loss / len(dataloader)
-        train_psnr = epoch_psnr / n
-        train_ssim = epoch_ssim / n
+        val_loss, val_psnr, val_ssim = evaluate_one_epoch(
+            model=model,
+            dataloader=val_loader,
+            criterion=criterion,
+            device=device,
+            dataset=val_dataset,
+        )
 
-        val_loss, val_psnr, val_ssim = evaluate_validation(
-            model, val_loader, device, criterion)
-        scheduler.step(val_loss)
-        lr = optimizer.param_groups[0]["lr"]
+        if scheduler is not None:
+            scheduler.step(val_loss)
 
-        #print results
-        print(f"Epoch [{epoch+1}/{NUM_EPOCHS}] | "
-              f"Train Loss:{train_loss:.4f} PSNR:{train_psnr:.2f} SSIM:{train_ssim:.4f} | "
-              f"Val Loss:{val_loss:.4f} PSNR:{val_psnr:.2f} SSIM:{val_ssim:.4f} | LR:{lr:.1e}")
+        current_lr = optimizer.param_groups[0]["lr"]
 
-        #save to csv
+        print(
+            f"Epoch [{epoch + 1}/{num_epochs}] | "
+            f"Train Loss: {train_loss:.4f} | Train PSNR: {train_psnr:.2f} dB | Train SSIM: {train_ssim:.4f} | "
+            f"Val Loss: {val_loss:.4f} | Val PSNR: {val_psnr:.2f} dB | Val SSIM: {val_ssim:.4f} | "
+            f"LR: {current_lr:.1e}"
+        )
+
         save_metrics_to_csv(
-            RESULTS_DIR / "train_val_metrics.csv",
-            [epoch+1, train_loss, train_psnr, train_ssim,
-             val_loss, val_psnr, val_ssim, lr],
-            ["epoch","train_loss","train_psnr","train_ssim",
-             "val_loss","val_psnr","val_ssim","lr"])
+            train_metrics_csv_path,
+            [epoch + 1, train_loss, train_psnr, train_ssim, current_lr],
+            header=["Epoch", "Loss", "PSNR", "SSIM", "LR"],
+        )
 
-        # ── per-epoch checkpoint ──────────────────────────────
-        ckpt_path = CHECKPOINT_DIR / f"bichannel_epoch_{epoch+1:04d}.pth"
-        save_checkpoint(model, optimizer, scheduler,
-                        epoch + 1, val_loss, ckpt_path)
-        print(f"  → Checkpoint saved: {ckpt_path.name}")
-        
-        # ── save best-model checkpoint based on lowest val loss ────=
+        save_metrics_to_csv(
+            val_metrics_csv_path,
+            [epoch + 1, val_loss, val_psnr, val_ssim, current_lr],
+            header=["Epoch", "Loss", "PSNR", "SSIM", "LR"],
+        )
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_checkpoint(model, optimizer, scheduler,
-                            epoch + 1, val_loss, best_model_path)
-            print(f"  → New best model (val_loss={best_val_loss:.4f})")
-
-    return best_model_path
+            torch.save(
+                {
+                    "model_state": model.state_dict(),
+                    "epoch": epoch + 1,
+                    "train_loss": train_loss,
+                    "train_psnr": train_psnr,
+                    "train_ssim": train_ssim,
+                    "val_loss": val_loss,
+                    "val_psnr": val_psnr,
+                    "val_ssim": val_ssim,
+                    "lr": current_lr,
+                },
+                best_model_path,
+            )
+            print(f"New best model saved to {best_model_path} with val loss: {best_val_loss:.4f}")

@@ -1,46 +1,91 @@
 import os, torch, random, cv2, math, numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
-from typing import List, Tuple
 
-#Definitions: 
-#IH: high-resolution ground truth (100×100)
-#IL: degraded version (blur + downsample)
-#Iin: resized LR input (48×48) i.e. resized from IL 
-#Then perform normalisation on Iin and IH so that after Iin passes through the network to come out with Iout: Iout and IH can be compared on the same scale 
+#calculate mean and std of an image
+def compute_mean_std(image_dir, image_size=(100, 100)):
+    """
+    Compute per-channel mean and std from the training images only.
+    Images are resized to image_size and scaled to [0,1].
 
-#per-image normalisation: in each R/G/B channel of an image, do Z-normalisation then tanh
-def normalize_per_image(img: np.ndarray, eps: float = 1e-8
-                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    mean = img.mean(axis=(0, 1))
-    std  = img.std(axis=(0, 1)).clip(eps)
-    return np.tanh((img - mean) / std).astype(np.float32), mean, std
+    Returns:
+        mean: tuple of 3 floats
+        std: tuple of 3 floats
+    """
+    image_paths = [
+        os.path.join(image_dir, img)
+        for img in os.listdir(image_dir)
+        if img.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
 
-#per-image denormalisation:  undo the tanh, then undo the z-normalisation
-def denormalize_per_image(img: torch.Tensor, mean: np.ndarray,
-                           std: np.ndarray, eps: float = 1e-6) -> torch.Tensor:
-    mt = torch.tensor(mean, dtype=img.dtype, device=img.device).view(3, 1, 1)
-    st = torch.tensor(std,  dtype=img.dtype, device=img.device).view(3, 1, 1)
-    return torch.clamp(torch.atanh(img.clamp(-1+eps, 1-eps)) * st + mt, 0.0, 1.0)
+    if len(image_paths) == 0:
+        raise ValueError(f"No images found in {image_dir}")
 
-#motion blur kernel
-def _motion_blur_kernel(length: int, theta: float) -> np.ndarray:
-    length = max(2, int(length)) #it's a minimum 2x2 kernel for blur, because 1x1 kernel will produce the original pixel and won't smear the pixels
+    channel_sum = np.zeros(3, dtype=np.float64)
+    channel_sum_sq = np.zeros(3, dtype=np.float64)
+    total_pixels = 0
+
+    for path in image_paths:
+        img = Image.open(path).convert("RGB")
+        img = img.resize(image_size, Image.BICUBIC)
+        img = np.array(img).astype(np.float32) / 255.0  # [0,1]
+
+        h, w, _ = img.shape
+        total_pixels += h * w
+
+        channel_sum += img.sum(axis=(0, 1))
+        channel_sum_sq += (img ** 2).sum(axis=(0, 1))
+
+    mean = channel_sum / total_pixels
+    std = np.sqrt(channel_sum_sq / total_pixels - mean ** 2)
+
+    # protect against division by zero
+    std = np.clip(std, 1e-8, None)
+
+    return tuple(mean.astype(np.float32)), tuple(std.astype(np.float32))
+
+
+# generic gaussian blur
+def gaussian_blur(img):
+    sigma = random.uniform(0, 7)
+    if sigma > 1e-6:
+        img = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
+    return img.astype(np.float32)
+
+
+# generic motion blur
+def motion_blur(img):
+    length = random.randint(0, 11)
+    theta = random.uniform(-np.pi, np.pi)
+
+    if length <= 1:
+        return img.astype(np.float32)
+
     kernel = np.zeros((length, length), dtype=np.float32)
-    c  = (length - 1) / 2.0
-    x0 = int(round(c - c * math.cos(theta)))
-    y0 = int(round(c - c * math.sin(theta)))
-    x1 = int(round(c + c * math.cos(theta)))
-    y1 = int(round(c + c * math.sin(theta)))
-    cv2.line(kernel, (x0, y0), (x1, y1), 1, thickness=1)
-    s = kernel.sum()
-    if s > 0:
-        kernel /= s
-    else:
-        kernel[length // 2, length // 2] = 1.0
-    return kernel
+    center = (length - 1) / 2.0
 
-# This is the dataset class that loads an Image for TRAINING or VALIDATION (not for testing)
+    x0 = center - (length - 1) / 2.0 * np.cos(theta)
+    y0 = center - (length - 1) / 2.0 * np.sin(theta)
+    x1 = center + (length - 1) / 2.0 * np.cos(theta)
+    y1 = center + (length - 1) / 2.0 * np.sin(theta)
+
+    cv2.line(
+        kernel,
+        (int(round(x0)), int(round(y0))),
+        (int(round(x1)), int(round(y1))),
+        1,
+        thickness=1
+    )
+
+    kernel_sum = kernel.sum()
+    if kernel_sum > 0:
+        kernel /= kernel_sum
+        img = cv2.filter2D(img, -1, kernel)
+
+    return img.astype(np.float32)
+
+
+# This is the dataset class that loads an Image.
 # It generates a low-res version (LR) by downsampling and optionally blurring the original high-res image (HR).
 class FaceDataset(Dataset):
     def __init__(self, image_dir):
@@ -95,46 +140,23 @@ class FaceDataset(Dataset):
 
         # Randomly apply either Gaussian blur or motion blur to simulate real-world degradation
         if random.random() < 0.5:
-            # Gaussian blur
-            sigma = random.uniform(0, 7)
-        
-            # If sigma is extremely close to 0, leave image unchanged
-            blurred = (cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
-                       if sigma > 1e-6 else img.copy())
-        
+            # Gaussian blur (applied to full-res img before downsampling)
+            small = gaussian_blur(img)
         else:
-            # Motion blur
-            length = random.randint(0, 11)
-            theta = random.uniform(-math.pi, math.pi)
-            blurred = (cv2.filter2D(img, -1, _motion_blur_kernel(length, theta)) #apply the _motion_blur_kernel 
-                       if length > 1 else img.copy())
-                    
+            # Motion blur (applied to full-res img before downsampling)
+            small = motion_blur(img)
+
         # random downsample factor (2 to 5)
         scale = random.randint(2, 5)
-        return cv2.resize(blurred, (max(1, w // scale), max(1, h // scale)),
-                          interpolation=cv2.INTER_CUBIC).astype(np.float32)
-    
-    @staticmethod
-    def motion_blur_kernel(length: int, theta: float) -> np.ndarray:
-        return _motion_blur_kernel(length, theta)
 
-#Preprocessing done for test dataset in a different way: 
-class FixedTestFaceDataset(Dataset):
-    def __init__(self, image_paths: List[str], blur_type: str = "gaussian",
-                 gaussian_sigma: float = None, motion_length: int = None,
-                 base_seed: int = 42):
-        self.image_paths    = image_paths
-        self.hr_size        = HR_SIZE
-        self.fixed_lr_size  = TEST_FIXED_LR_SIZE
-        self.nn_input_size  = TEST_NN_INPUT_SIZE
-        self.blur_type      = blur_type
-        self.gaussian_sigma = gaussian_sigma
-        self.motion_length  = motion_length
-        self.base_seed      = base_seed
-        if blur_type == "gaussian" and gaussian_sigma is None:
-            raise ValueError("gaussian_sigma required")
-        if blur_type == "motion" and motion_length is None:
-            raise ValueError("motion_length required")
+        # downsample the blurred result
+        small = cv2.resize(
+            small,
+            (max(1, w // scale), max(1, h // scale)),
+            interpolation=cv2.INTER_CUBIC
+        )
+        
+        return small.astype(np.float32)
 
     def __len__(self):
         return len(self.image_paths)
@@ -179,3 +201,63 @@ class FixedTestFaceDataset(Dataset):
 
 
 
+        x = torch.clamp(x, 0.0, 1.0)
+        return x
+
+class Classical_FaceDataset:
+    def __init__(self, image_dir, hr_size=(100, 100)):
+        self.image_paths = [
+            os.path.join(image_dir, img)
+            for img in os.listdir(image_dir)
+            if img.lower().endswith((".jpg", ".jpeg", ".png"))
+        ]
+
+        if len(self.image_paths) == 0:
+            raise ValueError(f"No images found in {image_dir}")
+
+        self.hr_size = hr_size
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        path = self.image_paths[idx]
+
+        ih = self.generate_high_res(path)
+        il = self.generate_low_res(ih)
+
+        return il, ih
+
+    def generate_high_res(self, path):
+        img = Image.open(path).convert("RGB")
+        img = img.resize(self.hr_size, Image.BICUBIC)
+        ih = np.array(img).astype(np.float32) / 255.0
+        return ih
+
+    def generate_low_res(self, img):
+        h, w, _ = img.shape
+
+        degraded = img.copy()
+
+        if random.random() < 0.5:
+            degraded = gaussian_blur(degraded)
+        else:
+            degraded = motion_blur(degraded)
+
+        # keep same order as FaceDataset for consistency with your current setup
+        lr_w, lr_h = 50, 50
+
+        degraded = cv2.resize(
+            degraded,
+            (lr_w, lr_h),
+            interpolation=cv2.INTER_CUBIC
+        ).astype(np.float32)
+
+        return degraded.astype(np.float32)
+
+    def upscale_to_hr(self, lr_img):
+        return cv2.resize(
+            lr_img,
+            self.hr_size,
+            interpolation=cv2.INTER_CUBIC
+        ).astype(np.float32)
