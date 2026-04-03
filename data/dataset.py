@@ -1,5 +1,5 @@
-import os, torch, random, cv2, numpy as np
-from torch.utils.data import Dataset, DataLoader
+import os, torch, random, cv2, math, numpy as np
+from torch.utils.data import Dataset
 from PIL import Image
 
 #calculate mean and std of an image
@@ -88,7 +88,7 @@ def motion_blur(img):
 # This is the dataset class that loads an Image.
 # It generates a low-res version (LR) by downsampling and optionally blurring the original high-res image (HR).
 class FaceDataset(Dataset):
-    def __init__(self, image_dir, mean, std):
+    def __init__(self, image_dir):
         self.image_paths = [
             os.path.join(image_dir, img)
             for img in os.listdir(image_dir)
@@ -100,16 +100,6 @@ class FaceDataset(Dataset):
 
         # network input size
         self.lr_input_size = (48, 48)
-
-        # store mean/std for broadcasting
-        self.mean = np.array(mean, dtype=np.float32).reshape(1, 1, 3)
-        self.std = np.array(std, dtype=np.float32).reshape(1, 1, 3)
-
-        # torch versions for denormalize()
-        self.mean_torch = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
-        self.std_torch = torch.tensor(std, dtype=torch.float32).view(3, 1, 1)
-
-        self.eps = 1e-6
 
     def __len__(self):
         return len(self.image_paths)
@@ -124,23 +114,25 @@ class FaceDataset(Dataset):
         # convert to [0,1]
         IH = np.array(img).astype(np.float32) / 255.0
 
-        # -------- Step 1: create LR image --------
-        IL = self.generate_low_res(IH)
+        # -------- Step 1: create LR image by Gaussian OR motion blurring, then downsample by factor of 2-5 (see details of function below)--------
+        IL = self._generate_low_res(IH)
 
-        # -------- Step 2: preprocess --------
-        Iin = self.preprocess(IL)
+        # -------- Step 2: preprocess to resize to 48x48 then normalise --------
+        Iin = cv2.resize(IL, self.lr_input_size,
+                         interpolation=cv2.INTER_CUBIC).astype(np.float32)
 
-        # normalize HR too
-        IH = self.normalize(IH)
+        # normalize Iin and IH
+        Iin_norm, mean, std = normalize_per_image(Iin)
+        IH_norm = np.tanh((IH - mean) / std).astype(np.float32) #normalise IH using the mean and std from Iin as per the paper
 
         # convert to tensor (C,H,W)
-        Iin = torch.from_numpy(Iin).permute(2, 0, 1).float()
-        IH = torch.from_numpy(IH).permute(2, 0, 1).float()
+        Iin = torch.from_numpy(Iin_norm).permute(2, 0, 1).float()
+        IH = torch.from_numpy(IH_norm).permute(2, 0, 1).float()
 
-        return Iin, IH
+        return Iin, IH, torch.tensor(mean, dtype=torch.float32), torch.tensor(std,  dtype=torch.float32)
 
-    # Create LR image (blur + downsample)
-    def generate_low_res(self, img):
+    # Create LR image (blur then downsample)
+    def _generate_low_res(self, img):
         """
         img: numpy array in [0,1], shape (H,W,3)
         """
@@ -166,41 +158,48 @@ class FaceDataset(Dataset):
         
         return small.astype(np.float32)
 
-    # Preprocess (resize to 48x48)
-    def preprocess(self, IL):
-        IL = cv2.resize(
-            IL,
-            self.lr_input_size,
-            interpolation=cv2.INTER_CUBIC
-        ).astype(np.float32)
+    def __len__(self):
+        return len(self.image_paths)
 
-        IL = self.normalize(IL)
-        return IL
+    def __getitem__(self, idx):
+        img    = Image.open(self.image_paths[idx]).convert("RGB")
+        hr_img = img.resize(self.hr_size, Image.BICUBIC) #resize to 100x100 by bicubic method
+        IH     = np.array(hr_img).astype(np.float32) / 255.0 #get the 100x100 image with pixels range (0,1) by dividing by 255 
 
-    #normalise by z-normalisation then tanh , img: numpy array in [0,1], shape (H,W,3)
-    def normalize(self, img):
-        z = (img - self.mean) / self.std
-        y = np.tanh(z)
-        return y.astype(np.float32)
+        fixed_lr = self._fixed_test_preprocessing(img, idx) #see the function _fixed_test_preprocesing below: for single type of blur with single value on all the test images, then resize to 50x50
+        #then resize to 48x48 to enter the bichannel CNN:
+        Iin = cv2.resize(fixed_lr, self.nn_input_size,
+                         interpolation=cv2.INTER_CUBIC).astype(np.float32)
 
-    #denormalize by inverse tanh (i.e. z=atanh(y)) then inverse-z-normalisation (i.e.x= z*std + mean). Input: torch tensor of shape (C,H,W) or (B,C,H,W). Output: torch tensor in [0,1]
-    def denormalize(self, img):
-        if not isinstance(img, torch.Tensor):
-            raise TypeError("denormalize expects a torch.Tensor")
+        Iin_norm, mean, std = normalize_per_image(Iin) #Z-normalise and tanh the Iin to get Iin_norm
+        IH_norm = np.tanh((IH - mean) / std).astype(np.float32) #get IH Z-normalised and tanh done
 
-        img = torch.clamp(img, -1.0 + self.eps, 1.0 - self.eps)
+        #return the Iin_norm, IH_norm, mean, std
+        return (torch.from_numpy(Iin_norm).permute(2, 0, 1).float(),
+                torch.from_numpy(IH_norm).permute(2, 0, 1).float(),
+                torch.tensor(mean, dtype=torch.float32),
+                torch.tensor(std,  dtype=torch.float32))
 
-        mean = self.mean_torch.to(device=img.device, dtype=img.dtype)
-        std = self.std_torch.to(device=img.device, dtype=img.dtype)
-
-        z = torch.atanh(img)
-
-        if img.ndim == 3:
-            x = z * std + mean
-        elif img.ndim == 4:
-            x = z * std.unsqueeze(0) + mean.unsqueeze(0)
+    def _fixed_test_preprocessing(self, pil_img: Image.Image, idx: int) -> np.ndarray:
+        img_100 = np.array(pil_img.resize(self.hr_size, Image.BICUBIC)
+                           ).astype(np.float32) / 255.0
+        if self.blur_type == "gaussian":
+            img_blur = cv2.GaussianBlur(img_100, (0, 0),
+                                        sigmaX=self.gaussian_sigma,
+                                        sigmaY=self.gaussian_sigma)
         else:
-            raise ValueError(f"Unsupported shape: {img.shape}")
+            theta    = random.Random(self.base_seed + idx
+                                     ).uniform(-math.pi, math.pi)
+            img_blur = cv2.filter2D(img_100, -1,
+                                    _motion_blur_kernel(self.motion_length, theta))
+        return cv2.resize(img_blur, self.fixed_lr_size,
+                          interpolation=cv2.INTER_CUBIC).astype(np.float32)
+
+
+
+
+
+
 
         x = torch.clamp(x, 0.0, 1.0)
         return x

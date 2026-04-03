@@ -3,6 +3,11 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from models.model import BiChannelCNN
+from pathlib import Path
+import numpy as np
+from PIL import Image
+from torch.utils.data import DataLoader
+from data.dataset import denormalize_per_image
 
 
 def ensure_dir(path):
@@ -16,7 +21,23 @@ def save_image(tensor, path):
     img = np.clip(img, 0.0, 1.0)
     plt.imsave(path, img)
 
+#Get IMAGES.png for each test criteria e.g. gaussian sigma = 1,3,5, and motion blur l=2,6,9), to generate a image from Iin, outputs and IH. This will generate when the run_test_pipeline is run 
+def save_sample_outputs(model, dataset, device, save_dir: Path):
+    save_dir.mkdir(parents=True, exist_ok=True)
+    loader = DataLoader(dataset, batch_size=1, shuffle=False)
+    with torch.no_grad():
+        Iin, IH, mean_b, std_b = next(iter(loader))
+        Iin, IH = Iin.to(device).float(), IH.to(device).float()
+        outputs, alpha = model(Iin)
+        save_image(denormalize_per_image(Iin[0], mean_b[0].numpy(), std_b[0].numpy()),
+                   save_dir / "sample_lr.png")
+        save_image(denormalize_per_image(outputs[0], mean_b[0].numpy(), std_b[0].numpy()),
+                   save_dir / "sample_sr.png")
+        save_image(denormalize_per_image(IH[0],  mean_b[0].numpy(), std_b[0].numpy()),
+                   save_dir / "sample_hr.png")
+    print(f"Sample images saved to {save_dir}")
 
+#load model into testing for bichannel CNN
 def load_model(model_path, device):
     model = BiChannelCNN().to(device)
 
@@ -35,7 +56,7 @@ def load_model(model_path, device):
     model.eval()
     return model
 
-
+#not sure if this is useful: 
 def test_single_image(
     dataloader,
     device,
@@ -57,7 +78,7 @@ def test_single_image(
         Iin = Iin.to(device).float()
         IH = IH.to(device).float()
 
-        outputs = model(Iin)
+        outputs, _ = model(Iin)
 
         idx = image_index_in_batch
 

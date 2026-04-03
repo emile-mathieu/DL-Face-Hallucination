@@ -1,6 +1,5 @@
 import os
 import torch
-from torchmetrics.image import StructuralSimilarityIndexMeasure
 from utils.logger import save_metrics_to_csv
 
 

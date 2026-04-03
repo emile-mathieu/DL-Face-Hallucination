@@ -1,11 +1,10 @@
-import torch
 from data.dataset import FaceDataset
 from torch.utils.data import DataLoader
 
 # Preapre our DataLoaders for training, validation, and testing. 
 # Made different DataLoader settings (e.g., batch size, shuffling) for each training stage.
-def get_test_loader(data_path, mean, std):
-    dataset = FaceDataset(image_dir=data_path, mean=mean, std=std)
+def get_test_loader(data_path):
+    dataset = FaceDataset(image_dir=data_path)
 
     dataloader = DataLoader(
         dataset,
@@ -15,8 +14,8 @@ def get_test_loader(data_path, mean, std):
     return dataloader
 
 
-def get_val_loader(data_path, mean, std, batch_size=32):
-    dataset = FaceDataset(image_dir=data_path, mean=mean, std=std)
+def get_val_loader(data_path, batch_size=32):
+    dataset = FaceDataset(image_dir=data_path)
 
     dataloader = DataLoader(
         dataset,
@@ -27,8 +26,8 @@ def get_val_loader(data_path, mean, std, batch_size=32):
     return dataloader
 
 
-def get_dataloader(data_path, mean, std, batch_size=32):
-    dataset = FaceDataset(image_dir=data_path, mean=mean, std=std)
+def get_dataloader(data_path, batch_size=32):
+    dataset = FaceDataset(image_dir=data_path)
 
     dataloader = DataLoader(
         dataset,
