@@ -1,5 +1,7 @@
 import torch
 from utils.logger import save_metrics_to_csv
+import torch.nn.functional as F
+from pathlib import Path
 
 # ============================================================
 # Metrics  (Y-channel or RGB, toggled by METRIC_CHANNEL)
@@ -71,7 +73,18 @@ def evaluate_validation(model, dataloader, device, criterion):
 def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=20, scheduler=None):
     model.to(device)
 
-    for epoch in range(num_epochs):
+    start_epoch = 0
+    best_val_loss  = float("inf")
+    best_model_path = RESULTS_DIR / "best_model.pth"
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+
+    #checkpoint 
+    if resume_checkpoint and Path(resume_checkpoint).exists():
+        start_epoch, best_val_loss = load_checkpoint(
+            resume_checkpoint, model, optimizer, scheduler, device)
+        print(f"Resumed from epoch {start_epoch}, best_val_loss={best_val_loss:.4f}")
+
+    for epoch in range(start_epoch, NUM_EPOCHS):
         model.train()
 
         epoch_loss = 0.0
@@ -136,8 +149,14 @@ def train(optimizer, criterion, model, dataloader, device, dataset, num_epochs=2
              val_loss, val_psnr, val_ssim, lr],
             ["epoch","train_loss","train_psnr","train_ssim",
              "val_loss","val_psnr","val_ssim","lr"])
+
+        # ── per-epoch checkpoint ──────────────────────────────
+        ckpt_path = CHECKPOINT_DIR / f"bichannel_epoch_{epoch+1:04d}.pth"
+        save_checkpoint(model, optimizer, scheduler,
+                        epoch + 1, val_loss, ckpt_path)
+        print(f"  → Checkpoint saved: {ckpt_path.name}")
         
-        # save best model based on lowest validation loss
+        # ── save best-model checkpoint based on lowest val loss ────=
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             save_checkpoint(model, optimizer, scheduler,
