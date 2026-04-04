@@ -13,41 +13,38 @@ def ensure_dir(path):
     if path:
         os.makedirs(path, exist_ok=True)
 
-
-def denormalize_batch(batch, dataset):
-    """
-    Uses dataset.denormalize() if available.
-    Otherwise returns the batch unchanged.
-    """
-    if dataset is not None and hasattr(dataset, "denormalize"):
-        return dataset.denormalize(batch)
-    return batch
-
-
-def evaluate_one_epoch(model, dataloader, criterion, device, dataset=None):
+#deleted denormalise_batch function and updated functions below to denormalise within 
+def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6):
     model.eval()
-
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
-    total_loss = 0.0
-    total_psnr = 0.0
-    total_ssim = 0.0
+    total_loss = total_psnr = total_ssim = 0.0
     total_batches = 0
 
     with torch.no_grad():
-        for batch_idx, (Iin, IH) in enumerate(dataloader):
-            Iin = Iin.to(device).float()
-            IH = IH.to(device).float()
+        # Unpack all 4 returns from your FaceDataset
+        for batch_idx, (Iin, IH, means, stds) in enumerate(dataloader):
+            Iin, IH = Iin.to(device), IH.to(device)
+            # Reshape means/stds for broadcasting: (B, 3) -> (B, 3, 1, 1)
+            ms = means.view(-1, 3, 1, 1).to(device)
+            ss = stds.view(-1, 3, 1, 1).to(device)
 
             outputs = model(Iin)
             loss = criterion(outputs, IH)
 
-            pred = denormalize_batch(outputs, dataset)
-            target = denormalize_batch(IH, dataset)
+            # --- Individual Denormalization Logic ---
+            # 1. Undo Tanh (clamping to avoid log/atanh errors at -1 and 1)
+            # 2. Multiply by individual std, add individual mean
+            pred = torch.atanh(torch.clamp(outputs, -1 + eps, 1 - eps)) * ss + ms
+            target = torch.atanh(torch.clamp(IH, -1 + eps, 1 - eps)) * ss + ms
+            
+            # Clip to [0, 1] for valid PSNR/SSIM
+            pred = torch.clamp(pred, 0.0, 1.0)
+            target = torch.clamp(target, 0.0, 1.0)
 
             batch_psnr = psnr(pred, target)
             batch_ssim = ssim_metric(pred, target)
-
+            
             total_loss += loss.item()
             total_psnr += batch_psnr.item()
             total_ssim += batch_ssim.item()
@@ -67,7 +64,6 @@ def evaluate_one_epoch(model, dataloader, criterion, device, dataset=None):
 
     return avg_loss, avg_psnr, avg_ssim
 
-
 def train(
     model,
     train_loader,
@@ -77,6 +73,7 @@ def train(
     device,
     num_epochs=20,
     scheduler=None,
+    eps=1e-6,
     train_metrics_csv_path="results/train_metrics.csv",
     val_metrics_csv_path="results/val_metrics.csv",
     best_model_path="checkpoints/best_bichannel.pth",
@@ -88,49 +85,43 @@ def train(
 
     model.to(device)
 
-    train_dataset = getattr(train_loader, "dataset", None)
-    val_dataset = getattr(val_loader, "dataset", None)
-
     best_val_loss = float("inf")
 
     for epoch in range(num_epochs):
         model.train()
-
         train_ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-
-        epoch_loss = 0.0
-        epoch_psnr = 0.0
-        epoch_ssim = 0.0
+        
+        epoch_loss = epoch_psnr = epoch_ssim = 0.0
         total_batches = 0
 
-        for batch_idx, (Iin, IH) in enumerate(train_loader):
-            Iin = Iin.to(device).float()
-            IH = IH.to(device).float()
+        for batch_idx, (Iin, IH, means, stds) in enumerate(train_loader):
+            Iin, IH = Iin.to(device), IH.to(device)
+            ms = means.view(-1, 3, 1, 1).to(device)
+            ss = stds.view(-1, 3, 1, 1).to(device)
 
             optimizer.zero_grad()
-
             outputs = model(Iin)
 
             if epoch == 0 and batch_idx == 0:
                 print(
                     f"[TRAIN] Input: {Iin.shape} | Output: {outputs.shape} | Target: {IH.shape}"
                 )
-
+            
             loss = criterion(outputs, IH)
             loss.backward()
-
+            
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
-            pred = denormalize_batch(outputs, train_dataset)
-            target = denormalize_batch(IH, train_dataset)
-
-            batch_psnr = psnr(pred, target)
-            batch_ssim = train_ssim_metric(pred, target)
+            # --- Inline Individual Denormalization ---
+            with torch.no_grad(): # No need to track gradients for metrics
+                pred = torch.atanh(torch.clamp(outputs, -1 + eps, 1 - eps)) * ss + ms
+                target = torch.atanh(torch.clamp(IH, -1 + eps, 1 - eps)) * ss + ms
+                pred, target = pred.clamp(0, 1), target.clamp(0, 1)
 
             epoch_loss += loss.item()
-            epoch_psnr += batch_psnr.item()
-            epoch_ssim += batch_ssim.item()
+            epoch_psnr += psnr(pred, target).item()
+            epoch_ssim += train_ssim_metric(pred, target).item()
             total_batches += 1
 
         if total_batches == 0:
@@ -145,7 +136,7 @@ def train(
             dataloader=val_loader,
             criterion=criterion,
             device=device,
-            dataset=val_dataset,
+            eps=eps
         )
 
         if scheduler is not None:

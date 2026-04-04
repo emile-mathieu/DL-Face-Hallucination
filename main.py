@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from config import CONFIG
-from data.dataset import FaceDataset, Classical_FaceDataset, compute_mean_std
+from data.dataset import FaceDataset, Classical_FaceDataset, FixedTestFaceDataset
 from models.model import BiChannelCNN
 from training.train import train
 from reconstruction.reconstruction import (
@@ -159,8 +159,6 @@ def build_sfh(sfh_cfg):
 
 def run_test_dataset(
     bichannel_model,
-    mean,
-    std,
     device,
     train_dir,
     test_dir,
@@ -185,70 +183,68 @@ def run_test_dataset(
     ensure_dir(results_root)
     ensure_dir(images_dir)
 
-    print("Preparing datasets for test run...")
-    classical_train_dataset = Classical_FaceDataset(train_dir, hr_size=hr_size)
-    classical_test_dataset = Classical_FaceDataset(test_dir, hr_size=hr_size)
+    # 1. PREPARE IMAGE PATH LISTS
+    test_image_paths = sorted([
+        os.path.join(test_dir, f) for f in os.listdir(test_dir) 
+        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+    ])
+    if test_max_samples:
+        test_image_paths = test_image_paths[:test_max_samples]
 
-    bichannel_helper = FaceDataset(train_dir, mean=mean, std=std)
-
-    total_test = (
-        len(classical_test_dataset)
-        if test_max_samples is None
-        else min(len(classical_test_dataset), test_max_samples)
-    )
-
+    # ---------------------------------------------------------
+    # PHASE 1: CLASSICAL MODEL PREPARATION (SC1, SC2, SFH)
+    # ---------------------------------------------------------
     sc1_path = os.path.join(checkpoints_dir, sc1_cfg["checkpoint_name"])
     sc2_path = os.path.join(checkpoints_dir, sc2_cfg["checkpoint_name"])
     sfh_path = os.path.join(checkpoints_dir, sfh_cfg["checkpoint_name"])
 
-    need_train_pairs = not (
-        sc1_cfg["load_if_exists"] and os.path.exists(sc1_path)
-        and sc2_cfg["load_if_exists"] and os.path.exists(sc2_path)
-        and sfh_cfg["load_if_exists"] and os.path.exists(sfh_path)
-    )
+    # Check if we need to train the classical models
+    need_train = not (os.path.exists(sc1_path) and os.path.exists(sc2_path) and os.path.exists(sfh_path))
 
-    train_lr100, train_hr100 = None, None
-    if need_train_pairs:
-        print("Collecting classical training pairs...")
+    if need_train:
+        print("Collecting training pairs for Classical Models...")
+        classical_train_ds = Classical_FaceDataset(train_dir, hr_size=hr_size)
         train_lr100, train_hr100 = collect_training_pairs(
-            classical_train_dataset,
+            classical_train_ds,
             hr_size=hr_size,
             max_samples=classical_train_max_samples,
         )
 
+    # SC1 Build/Load
     if sc1_cfg["load_if_exists"] and os.path.exists(sc1_path):
         sc1 = load_pickle_model(sc1_path, "SC1")
     else:
         sc1 = build_sc1(sc1_cfg)
-        print("Training SC1...")
         sc1.fit(train_lr100, train_hr100)
-        if sc1_cfg["save_after_train"]:
-            save_pickle_model(sc1, sc1_path, "SC1")
+        if sc1_cfg["save_after_train"]: save_pickle_model(sc1, sc1_path, "SC1")
 
+    # SC2 Build/Load
     if sc2_cfg["load_if_exists"] and os.path.exists(sc2_path):
         sc2 = load_pickle_model(sc2_path, "SC2")
     else:
         sc2 = build_sc2(sc2_cfg)
-        print("Training SC2...")
         sc2.fit(train_lr100, train_hr100)
-        if sc2_cfg["save_after_train"]:
-            save_pickle_model(sc2, sc2_path, "SC2")
+        if sc2_cfg["save_after_train"]: save_pickle_model(sc2, sc2_path, "SC2")
 
+    # SFH Build/Load
     if sfh_cfg["load_if_exists"] and os.path.exists(sfh_path):
         sfh = load_pickle_model(sfh_path, "SFH")
     else:
         sfh = build_sfh(sfh_cfg)
-        print("Training SFH...")
         sfh.fit(train_lr100, train_hr100)
-        if sfh_cfg["save_after_train"]:
-            save_pickle_model(sfh, sfh_path, "SFH")
+        if sfh_cfg["save_after_train"]: save_pickle_model(sfh, sfh_path, "SFH")
 
+    # ---------------------------------------------------------
+    # PHASE 2: EVALUATION
+    # ---------------------------------------------------------
     bichannel_model.eval()
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-
     summary_rows = []
 
     for sigma in sigmas:
+        print(f"\n--- Testing Sigma: {sigma} ---")
+        
+        # Combined container for stats
         totals = {
             "bichannel": {"psnr": 0.0, "ssim": 0.0, "count": 0},
             "sc1": {"psnr": 0.0, "ssim": 0.0, "count": 0},
@@ -256,104 +252,94 @@ def run_test_dataset(
             "sfh": {"psnr": 0.0, "ssim": 0.0, "count": 0},
         }
 
-        print(f"\n===== Testing sigma={sigma} =====")
+        # --- PART A: BICHACHENNEL EVALUATION (Uses DataLoader) ---
+        bi_dataset = FixedTestFaceDataset(
+            image_paths=test_image_paths,
+            blur_type="gaussian",
+            gaussian_sigma=sigma
+        )
+        bi_loader = DataLoader(bi_dataset, batch_size=1, shuffle=False)
 
-        for idx in range(total_test):
-            _, hr_img = classical_test_dataset[idx]
+        print(f"Running BiChannel Evaluation (N={len(bi_loader)})...")
+        for idx, (Iin_norm, IH_norm, mean, std) in enumerate(bi_loader):
+            Iin_norm = Iin_norm.to(device)
+            ms = mean.view(-1, 3, 1, 1).to(device)
+            ss = std.view(-1, 3, 1, 1).to(device)
+
+            with torch.no_grad():
+                raw_out, _ = bichannel_model(Iin_norm)
+                # Handle model returning (pred, features) or just pred
+                outputs = raw_out[0] if isinstance(raw_out, (tuple, list)) else raw_out
+                
+                eps = 1e-6
+                # Denormalize Prediction
+                pred_t = torch.atanh(torch.clamp(outputs, -1 + eps, 1 - eps)) * ss + ms
+                pred_t = torch.clamp(pred_t, 0.0, 1.0)
+                
+                # Denormalize Ground Truth for fair comparison
+                target_t = torch.atanh(torch.clamp(IH_norm.to(device), -1 + eps, 1 - eps)) * ss + ms
+                target_t = torch.clamp(target_t, 0.0, 1.0)
+
+            totals["bichannel"]["psnr"] += psnr(pred_t, target_t).item()
+            totals["bichannel"]["ssim"] += ssim_metric(pred_t, target_t).item()
+            totals["bichannel"]["count"] += 1
+
+            if idx < save_first_n:
+                bi_np = pred_t.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_bichannel.png"), bi_np)
+                # Save Reference HR and LR for BiChannel part
+                hr_ref = target_t.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_hr.png"), hr_ref)
+
+        # --- PART B: CLASSICAL EVALUATION (Uses range/Classical_FaceDataset) ---
+        classical_ds = Classical_FaceDataset(test_dir, hr_size=hr_size)
+        num_classical = min(len(classical_ds), test_max_samples) if test_max_samples else len(classical_ds)
+
+        print(f"Running Classical Evaluation (N={num_classical})...")
+        for idx in range(num_classical):
+            _, hr_img = classical_ds[idx]
             hr_img = np.clip(hr_img, 0.0, 1.0).astype(np.float32)
 
+            # Generate synthetic inputs for classical models
             lr50 = make_lr_from_hr_sigma(hr_img, sigma=sigma, lr_size=lr_size)
             lr100 = bicubic_to_hr(lr50, hr_size=hr_size)
 
-            bi_input = bichannel_helper.preprocess(lr50)
-            bi_input_t = (
-                torch.from_numpy(bi_input)
-                .permute(2, 0, 1)
-                .unsqueeze(0)
-                .float()
-                .to(device)
-            )
-
-            with torch.no_grad():
-                bi_pred = bichannel_model(bi_input_t).squeeze(0).cpu()
-                bi_img = (
-                    bichannel_helper.denormalize(bi_pred)
-                    .permute(1, 2, 0)
-                    .numpy()
-                    .astype(np.float32)
-                )
-                bi_img = np.clip(bi_img, 0.0, 1.0)
-
-            sc1_img = np.clip(sc1.predict(lr100), 0.0, 1.0).astype(np.float32)
-            sc2_img = np.clip(sc2.predict(lr50), 0.0, 1.0).astype(np.float32)
-            sfh_img = np.clip(sfh.predict(lr50), 0.0, 1.0).astype(np.float32)
-
-            outputs = {
-                "bichannel": bi_img,
-                "sc1": sc1_img,
-                "sc2": sc2_img,
-                "sfh": sfh_img,
+            preds = {
+                "sc1": np.clip(sc1.predict(lr100), 0.0, 1.0),
+                "sc2": np.clip(sc2.predict(lr50), 0.0, 1.0),
+                "sfh": np.clip(sfh.predict(lr50), 0.0, 1.0),
             }
 
-            hr_tensor = (
-                torch.from_numpy(hr_img)
-                .permute(2, 0, 1)
-                .unsqueeze(0)
-                .float()
-                .to(device)
-            )
+            hr_t = torch.from_numpy(hr_img).permute(2,0,1).unsqueeze(0).to(device)
 
-            for model_name, pred_img in outputs.items():
-                pred_tensor = (
-                    torch.from_numpy(pred_img)
-                    .permute(2, 0, 1)
-                    .unsqueeze(0)
-                    .float()
-                    .to(device)
-                )
-
-                img_psnr = psnr(pred_tensor, hr_tensor).item()
-                img_ssim = ssim_metric(pred_tensor, hr_tensor).item()
-
-                totals[model_name]["psnr"] += img_psnr
-                totals[model_name]["ssim"] += img_ssim
-                totals[model_name]["count"] += 1
+            for name, img_np in preds.items():
+                p_t = torch.from_numpy(img_np).permute(2,0,1).unsqueeze(0).to(device)
+                totals[name]["psnr"] += psnr(p_t, hr_t).item()
+                totals[name]["ssim"] += ssim_metric(p_t, hr_t).item()
+                totals[name]["count"] += 1
 
                 if idx < save_first_n:
-                    filename = f"sigma{sigma}_img{idx:03d}_{model_name}.png"
-                    save_rgb_image(os.path.join(images_dir, filename), pred_img)
+                    save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_{name}.png"), img_np)
 
-            if idx < save_first_n:
-                save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_hr.png"), hr_img)
-                save_rgb_image(
-                    os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_lr.png"),
-                    bicubic_to_hr(lr50, hr_size),
-                )
-
-            if (idx + 1) % 10 == 0 or (idx + 1) == total_test:
-                print(f"Sigma {sigma}: processed {idx + 1}/{total_test}")
-
+        # ---------------------------------------------------------
+        # PHASE 3: AGGREGATE RESULTS FOR SIGMA
+        # ---------------------------------------------------------
         for model_name, vals in totals.items():
             count = max(vals["count"], 1)
             avg_psnr = vals["psnr"] / count
             avg_ssim = vals["ssim"] / count
 
             summary_rows.append([sigma, model_name, avg_psnr, avg_ssim, count])
+            print(f"Sigma={sigma} | {model_name:9} | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f} | N: {count}")
 
-            print(
-                f"Sigma={sigma} | {model_name} -> "
-                f"PSNR={avg_psnr:.2f} dB | SSIM={avg_ssim:.4f} | N={count}"
-            )
-
+    # Write Results to CSV
     eval_csv = os.path.join(results_root, "eval_metrics.csv")
     with open(eval_csv, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["sigma", "model", "avg_psnr", "avg_ssim", "num_images"])
         writer.writerows(summary_rows)
 
-    print("\nFinished run_test_dataset()")
-    print(f"Evaluation CSV: {eval_csv}")
-    print(f"Saved images folder: {images_dir}")
+    print(f"\nEvaluation Complete. Results saved to: {eval_csv}")
 
 
 def main():
@@ -377,22 +363,19 @@ def main():
     hr_size = tuple(sc2_cfg["hr_size"])
     bichannel_ckpt_path = os.path.join(checkpoints_dir, bi_cfg["checkpoint_name"])
 
+    # 1. Initialize Model
     model = BiChannelCNN().to(device)
 
-    mean = None
-    std = None
-
+    # 2. Load checkpoint if it exists
+    # Note: mean/std returned here might be None because we are using the new per-image logic,
+    # but we keep the variables to avoid breaking the load function signature.
     if bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path):
-        model, mean, std = load_bichannel_checkpoint(model, bichannel_ckpt_path, device)
+        model, _, _ = load_bichannel_checkpoint(model, bichannel_ckpt_path, device)
 
-    if mean is None or std is None:
-        print("Computing train-set mean/std...")
-        mean, std = compute_mean_std(train_path, image_size=hr_size)
-        print(f"Mean: {mean}")
-        print(f"Std: {std}")
-
-    train_dataset = FaceDataset(train_path, mean=mean, std=std)
-    val_dataset = FaceDataset(val_path, mean=mean, std=std)
+    # 3. Initialize Datasets
+    # Removed mean=mean, std=std because FaceDataset now calculates them internally per image
+    train_dataset = FaceDataset(train_path)
+    val_dataset = FaceDataset(val_path)
 
     train_loader = DataLoader(
         train_dataset,
@@ -409,8 +392,9 @@ def main():
         pin_memory=True
     )
 
+    # 4. Training Logic
     if not (bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path)):
-        print("Training BiChannel CNN...")
+        print("Training BiChannel CNN with per-image normalization...")
 
         criterion = nn.MSELoss()
         optimizer = optim.SGD(
@@ -427,25 +411,29 @@ def main():
             min_lr=bi_cfg["min_lr"],
         )
 
+        # The updated train function expects 4 items from the loader
         train(
-            model,
-            train_loader,
-            val_loader,
-            optimizer,
-            criterion,
-            device,
-            bi_cfg["num_epochs"],
-            scheduler,
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            num_epochs=bi_cfg["num_epochs"],
+            scheduler=scheduler,
+            eps=1e-6 # Matching your function signature
         )
 
         if bi_cfg["save_after_train"]:
-            save_bichannel_checkpoint(model, mean, std, bichannel_ckpt_path)
+            # We pass None for global mean/std since we use per-image stats now
+            save_bichannel_checkpoint(model, None, None, bichannel_ckpt_path)
 
+    # 5. Evaluation
     print("\nRunning test dataset evaluation...")
     run_test_dataset(
         bichannel_model=model,
-        mean=mean,
-        std=std,
+        # run_test_dataset may still need to handle per-image stats 
+        # inside its own implementation using FixedTestFaceDataset
         device=device,
         train_dir=train_path,
         test_dir=test_path,
@@ -455,6 +443,18 @@ def main():
         save_first_n=test_cfg["save_first_n"],
     )
 
+
+    print("\nRunning test dataset evaluation...")
+    run_test_dataset(
+        bichannel_model=model,
+        device=device,
+        train_dir=train_path,
+        test_dir=test_path,
+        sigmas=test_cfg["sigmas"],
+        classical_train_max_samples=test_cfg["classical_train_max_samples"],
+        test_max_samples=test_cfg["test_max_samples"],
+        save_first_n=test_cfg["save_first_n"],
+    )
 
 if __name__ == "__main__":
     main()
