@@ -12,6 +12,19 @@ CONFIG = {
         "results_dir": os.path.join(ROOT_DIR, "results"),
         "trained_models_dir": os.path.join(ROOT_DIR, "checkpoints"),
     },
+    
+    "basic": {
+        "batch_size": 200,
+        "num_epochs": 10,
+        "lr": 1e-4,
+        "min_lr": 1e-6,
+        "weight_decay": 5e-4,
+        "patience": 5,
+        "checkpoint_name": "basic.pth",
+        "load_if_exists": True,
+        "save_after_train": True,
+        "num_workers": 10
+    },
 
     "bichannel": {
         "batch_size": 200,
@@ -23,7 +36,7 @@ CONFIG = {
         "checkpoint_name": "bichannel.pth",
         "load_if_exists": True,
         "save_after_train": True,
-        "num_workers": 4
+        "num_workers": 10
     },
 
     "sc1": {
