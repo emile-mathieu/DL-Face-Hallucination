@@ -23,6 +23,7 @@ CONFIG = {
         "checkpoint_name": "bichannel.pth",
         "load_if_exists": True,
         "save_after_train": True,
+        "num_workers": 4
     },
 
     "sc1": {

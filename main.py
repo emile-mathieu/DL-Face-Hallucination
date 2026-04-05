@@ -12,6 +12,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from config import CONFIG
 from data.dataset import FaceDataset, Classical_FaceDataset, FixedTestFaceDataset
+from data.dataloader import get_test_loader, get_train_loader, get_val_loader
 from models.model import BiChannelCNN
 from training.train import train
 from reconstruction.reconstruction import (
@@ -366,34 +367,27 @@ def main():
     # 1. Initialize Model
     model = BiChannelCNN().to(device)
 
-    # 2. Load checkpoint if it exists
+    # 2. Initialize Datasets
+    # Removed mean=mean, std=std because FaceDataset now calculates them internally per image
+    train_loader = get_train_loader(
+        train_path,
+        batch_size=bi_cfg["batch_size"],
+        num_workers=bi_cfg["num_workers"]
+    )
+    val_loader = get_val_loader(
+        val_path, 
+        batch_size=bi_cfg["batch_size"], 
+        num_workers=bi_cfg["num_workers"]
+    )
+
+    # 3. Load checkpoint if it exists, if not train the model from scratch
     # Note: mean/std returned here might be None because we are using the new per-image logic,
     # but we keep the variables to avoid breaking the load function signature.
     if bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path):
         model, _, _ = load_bichannel_checkpoint(model, bichannel_ckpt_path, device)
 
-    # 3. Initialize Datasets
-    # Removed mean=mean, std=std because FaceDataset now calculates them internally per image
-    train_dataset = FaceDataset(train_path)
-    val_dataset = FaceDataset(val_path)
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=bi_cfg["batch_size"],
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=bi_cfg["batch_size"],
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True
-    )
-
     # 4. Training Logic
-    if not (bi_cfg["load_if_exists"] and os.path.exists(bichannel_ckpt_path)):
+    else:
         print("Training BiChannel CNN with per-image normalization...")
 
         criterion = nn.MSELoss()
@@ -443,18 +437,6 @@ def main():
         save_first_n=test_cfg["save_first_n"],
     )
 
-
-    print("\nRunning test dataset evaluation...")
-    run_test_dataset(
-        bichannel_model=model,
-        device=device,
-        train_dir=train_path,
-        test_dir=test_path,
-        sigmas=test_cfg["sigmas"],
-        classical_train_max_samples=test_cfg["classical_train_max_samples"],
-        test_max_samples=test_cfg["test_max_samples"],
-        save_first_n=test_cfg["save_first_n"],
-    )
 
 if __name__ == "__main__":
     main()
