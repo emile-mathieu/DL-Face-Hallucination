@@ -82,6 +82,7 @@ CONFIG = {
 
     "run_test_dataset": {
         "sigmas": (1, 3, 5),
+        "lengths": (2, 6, 9),
         "classical_train_max_samples": 300,
         "test_max_samples": 500,
         "save_first_n": 5,
