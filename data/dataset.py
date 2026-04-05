@@ -34,11 +34,14 @@ def gaussian_blur(img, sigma=None):
     img = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
     return img.astype(np.float32)
 
-def motion_blur(img, length=None, theta=None):
+def motion_blur(img, length=None, theta=None, base_seed=None):
     if length is None:
         length = random.randint(2, 11)
     if theta is None:
-        theta = random.uniform(-np.pi, np.pi)
+        if base_seed:
+            theta = random.Random(base_seed).uniform(-math.pi, math.pi)
+        else:
+            theta = random.uniform(-math.pi, math.pi)
 
     kernel = np.zeros((length, length), dtype=np.float32)
     center = (length - 1) / 2.0
@@ -73,7 +76,8 @@ def motion_blur(img, length=None, theta=None):
 class FaceDataset(Dataset):
     def __init__(self, image_dir, max_items=None, 
                  is_classical=False, classical_hr_size=(100,100),
-                 blur_type=None, gaussian_sigma=None, motion_length=None):
+                 blur_type=None, gaussian_sigma=None, 
+                 motion_length=None, base_seed=None):
         
         self.image_paths = [
             os.path.join(image_dir, img)
@@ -98,8 +102,8 @@ class FaceDataset(Dataset):
         self.motion_length = motion_length
         if blur_type == "gaussian" and gaussian_sigma is None:
             raise ValueError("gaussian_sigma required")
-        if blur_type == "motion" and motion_length is None:
-            raise ValueError("motion_length required")
+        if blur_type == "motion" and (motion_length is None or base_seed is None):
+            raise ValueError("motion_length and base_seed required")
     
 
     def __len__(self):
@@ -116,7 +120,7 @@ class FaceDataset(Dataset):
         IH = np.array(img).astype(np.float32) / 255.0
 
         # -------- Step 1: create LR image by Gaussian OR motion blurring, then downsample by factor of 2-5 (see details of function below)--------
-        IL = self._generate_low_res(IH)
+        IL = self._generate_low_res(IH, idx)
 
         # Classical dataset don't need normalize
         if self.is_classical:
@@ -138,7 +142,7 @@ class FaceDataset(Dataset):
         return Iin, IH, torch.tensor(mean, dtype=torch.float32), torch.tensor(std,  dtype=torch.float32)
 
     # Create LR image (blur then downsample)
-    def _generate_low_res(self, img):
+    def _generate_low_res(self, img, idx):
         """
         img: numpy array in [0,1], shape (H,W,3)
         """
@@ -150,7 +154,7 @@ class FaceDataset(Dataset):
         if self.blur_type == "gaussian":
             result = gaussian_blur(result, sigma=self.gaussian_sigma)
         elif self.blur_type == "motion":
-            result = motion_blur(result, length=self.motion_length)
+            result = motion_blur(result, length=self.motion_length, base_seed=self.base_seed+idx)
         elif random.random() < 0.5:
             result = gaussian_blur(result)
         else:
