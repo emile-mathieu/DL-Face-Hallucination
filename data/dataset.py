@@ -25,21 +25,20 @@ def denormalize_per_image(img: torch.Tensor, mean: np.ndarray,
     return torch.clamp(torch.atanh(img.clamp(-1+eps, 1-eps)) * st + mt, 0.0, 1.0)
 
 
-# generic gaussian blur
-def gaussian_blur(img):
-    sigma = random.uniform(0, 7)
-    if sigma > 1e-6:
-        img = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
+# Gaussian and motion blur, use specified parameters if any
+
+def gaussian_blur(img, sigma=None):
+    if sigma is None:
+        sigma = random.uniform(1e-6, 7)
+        
+    img = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
     return img.astype(np.float32)
 
-
-# generic motion blur
-def motion_blur(img):
-    length = random.randint(0, 11)
-    theta = random.uniform(-np.pi, np.pi)
-
-    if length <= 1:
-        return img.astype(np.float32)
+def motion_blur(img, length=None, theta=None):
+    if length is None:
+        length = random.randint(2, 11)
+    if theta is None:
+        theta = random.uniform(-np.pi, np.pi)
 
     kernel = np.zeros((length, length), dtype=np.float32)
     center = (length - 1) / 2.0
@@ -69,8 +68,13 @@ def motion_blur(img):
 
 # This is the dataset class that loads an Image.
 # It generates a low-res version (LR) by downsampling and optionally blurring the original high-res image (HR).
+# Combined FixedTestFaceDataset and Classical_FaceDataset by specifying parameters
+
 class FaceDataset(Dataset):
-    def __init__(self, image_dir):
+    def __init__(self, image_dir, max_items=None, 
+                 is_classical=False, classical_hr_size=(100,100),
+                 blur_type=None, gaussian_sigma=None, motion_length=None):
+        
         self.image_paths = [
             os.path.join(image_dir, img)
             for img in os.listdir(image_dir)
@@ -82,6 +86,21 @@ class FaceDataset(Dataset):
 
         # network input size
         self.lr_input_size = (48, 48)
+        
+        # Additional configs for test dataset and classical dataset
+        if max_items:
+            self.image_paths = sorted(self.image_paths)[:max_items]
+        self.is_classical = is_classical
+        if self.is_classical:
+            self.hr_size=classical_hr_size
+        self.blur_type = blur_type
+        self.gaussian_sigma = gaussian_sigma
+        self.motion_length = motion_length
+        if blur_type == "gaussian" and gaussian_sigma is None:
+            raise ValueError("gaussian_sigma required")
+        if blur_type == "motion" and motion_length is None:
+            raise ValueError("motion_length required")
+    
 
     def __len__(self):
         return len(self.image_paths)
@@ -98,6 +117,11 @@ class FaceDataset(Dataset):
 
         # -------- Step 1: create LR image by Gaussian OR motion blurring, then downsample by factor of 2-5 (see details of function below)--------
         IL = self._generate_low_res(IH)
+
+        # Classical dataset don't need normalize
+        if self.is_classical:
+            return IL, IH
+
 
         # -------- Step 2: preprocess to resize to 48x48 then normalise --------
         Iin = cv2.resize(IL, self.lr_input_size,
@@ -120,25 +144,45 @@ class FaceDataset(Dataset):
         """
         h, w, _ = img.shape
 
-        # Randomly apply either Gaussian blur or motion blur to simulate real-world degradation
-        if random.random() < 0.5:
-            # Gaussian blur (applied to full-res img before downsampling)
-            small = gaussian_blur(img)
+        result = img.copy()
+
+        # If specified, use the blur parameters, else, apply random blurs
+        if self.blur_type == "gaussian":
+            result = gaussian_blur(result, sigma=self.gaussian_sigma)
+        elif self.blur_type == "motion":
+            result = motion_blur(result, length=self.motion_length)
+        elif random.random() < 0.5:
+            result = gaussian_blur(result)
         else:
-            # Motion blur (applied to full-res img before downsampling)
-            small = motion_blur(img)
+            result = motion_blur(result)
 
-        # random downsample factor (2 to 5)
-        scale = random.randint(2, 5)
-
-        # downsample the blurred result
-        small = cv2.resize(
-            small,
-            (max(1, w // scale), max(1, h // scale)),
-            interpolation=cv2.INTER_CUBIC
-        )
+        if not self.is_classical:
+            # random downsample factor (2 to 5)
+            scale = random.randint(2, 5)
+            result = cv2.resize(
+                result,
+                (max(1, w // scale), max(1, h // scale)),
+                interpolation=cv2.INTER_CUBIC
+            )
+        else:
+            # classical use fixed (50,50) resolution
+            result = cv2.resize(
+                result,
+                (50,50),
+                interpolation=cv2.INTER_CUBIC
+            )
         
-        return small.astype(np.float32)
+        return result.astype(np.float32)
+    
+    #function from Classical_FaceDataset
+    #this function no use? can delete? 
+    def upscale_to_hr(self, lr_img):
+        return cv2.resize(
+            lr_img,
+            self.hr_size,
+            interpolation=cv2.INTER_CUBIC
+        ).astype(np.float32)
+
 
 #Preprocessing done for test dataset with fixed blurs and specific downfactor  
 class FixedTestFaceDataset(Dataset):
