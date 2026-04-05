@@ -19,14 +19,7 @@ from models.model import BasicCNN, BiChannelCNN
 from training.train import run_train_pipeline
 from training.test import evaluate_one_test_setting
 from training.classical import classical_train, classical_evaluate_sigma
-from utils.utils import(
-    ensure_dir,
-    save_bichannel_checkpoint,
-    load_bichannel_checkpoint,
-    save_rgb_image,
-    psnr,
-    ssim
-)
+from utils.utils import ensure_dir, load_bichannel_checkpoint
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -34,100 +27,6 @@ def resolve_path(path_value):
     if os.path.isabs(path_value):
         return path_value
     return os.path.join(PROJECT_ROOT, path_value)
-
-
-
-def run_test_dataset(
-    bichannel_model,
-    device,
-    train_dir,
-    test_dir,
-    sigmas,
-    classical_train_max_samples,
-    test_max_samples,
-    save_first_n,
-):
-
-    # ---------------------------------------------------------
-    # PHASE 2: EVALUATION
-    # ---------------------------------------------------------
-    bichannel_model.eval()
-    summary_rows = []
-
-    for sigma in sigmas:
-        print(f"\n--- Testing Sigma: {sigma} ---")
-        
-        # Combined container for stats
-        totals = {
-            "bichannel": {"psnr": 0.0, "ssim": 0.0, "count": 0},
-            "sc1": {"psnr": 0.0, "ssim": 0.0, "count": 0},
-            "sc2": {"psnr": 0.0, "ssim": 0.0, "count": 0},
-            "sfh": {"psnr": 0.0, "ssim": 0.0, "count": 0},
-        }
-
-        # --- PART A: BICHACHENNEL EVALUATION (Uses DataLoader) ---
-        bi_dataset = FixedTestFaceDataset(
-            image_paths=test_image_paths,
-            blur_type="gaussian",
-            gaussian_sigma=sigma
-        )
-        bi_loader = DataLoader(bi_dataset, batch_size=1, shuffle=False)
-        bi_loader = get_test_loader(
-            image_dir=test_image_paths,
-            
-        )
-
-        print(f"Running BiChannel Evaluation (N={len(bi_loader)})...")
-        for idx, (Iin_norm, IH_norm, mean, std) in enumerate(bi_loader):
-            Iin_norm = Iin_norm.to(device)
-            ms = mean.view(-1, 3, 1, 1).to(device)
-            ss = std.view(-1, 3, 1, 1).to(device)
-
-            with torch.no_grad():
-                raw_out, _ = bichannel_model(Iin_norm)
-                # Handle model returning (pred, features) or just pred
-                outputs = raw_out[0] if isinstance(raw_out, (tuple, list)) else raw_out
-                
-                eps = 1e-6
-                # Denormalize Prediction
-                pred_t = torch.atanh(torch.clamp(outputs, -1 + eps, 1 - eps)) * ss + ms
-                pred_t = torch.clamp(pred_t, 0.0, 1.0)
-                
-                # Denormalize Ground Truth for fair comparison
-                target_t = torch.atanh(torch.clamp(IH_norm.to(device), -1 + eps, 1 - eps)) * ss + ms
-                target_t = torch.clamp(target_t, 0.0, 1.0)
-
-            totals["bichannel"]["psnr"] += psnr(pred_t, target_t)
-            totals["bichannel"]["ssim"] += ssim(pred_t, target_t)
-            totals["bichannel"]["count"] += 1
-
-            if idx < save_first_n:
-                bi_np = pred_t.squeeze(0).permute(1, 2, 0).cpu().numpy()
-                save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_bichannel.png"), bi_np)
-                # Save Reference HR and LR for BiChannel part
-                hr_ref = target_t.squeeze(0).permute(1, 2, 0).cpu().numpy()
-                save_rgb_image(os.path.join(images_dir, f"sigma{sigma}_img{idx:03d}_hr.png"), hr_ref)
-
-       
-        # ---------------------------------------------------------
-        # PHASE 3: AGGREGATE RESULTS FOR SIGMA
-        # ---------------------------------------------------------
-        for model_name, vals in totals.items():
-            count = max(vals["count"], 1)
-            avg_psnr = vals["psnr"] / count
-            avg_ssim = vals["ssim"] / count
-
-            summary_rows.append([sigma, model_name, avg_psnr, avg_ssim, count])
-            print(f"Sigma={sigma} | {model_name:9} | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f} | N: {count}")
-
-    # Write Results to CSV
-    eval_csv = os.path.join(results_root, "eval_metrics.csv")
-    with open(eval_csv, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["sigma", "model", "avg_psnr", "avg_ssim", "num_images"])
-        writer.writerows(summary_rows)
-
-    print(f"\nEvaluation Complete. Results saved to: {eval_csv}")
 
 
 def main(mode="bichannel"):
@@ -303,42 +202,6 @@ def main(mode="bichannel"):
 
     print(f"\nEvaluation Complete. Results saved to: {eval_csv}")
 
-    
-    run_test_dataset(
-        bichannel_model=model,
-        # run_test_dataset may still need to handle per-image stats 
-        # inside its own implementation using FixedTestFaceDataset
-        device=device,
-        train_dir=train_path,
-        test_dir=test_path,
-        sigmas=test_cfg["sigmas"],
-        classical_train_max_samples=test_cfg["classical_train_max_samples"],
-        test_max_samples=test_cfg["test_max_samples"],
-        save_first_n=test_cfg["save_first_n"],
-    )
-
-
-
-    # 1. PREPARE IMAGE PATH LISTS
-    test_image_paths = sorted([
-        os.path.join(test_dir, f) for f in os.listdir(test_dir) 
-        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
-    ])
-    if test_max_samples:
-        test_image_paths = test_image_paths[:test_max_samples]
-
-
-    # 4. Evaluation, both classical and the model
-    print("\nRunning test dataset evaluation...")
-
-    classical_train_ds = get_classical_train_dataset(train_path, hr_size=hr_size)
-    total = run_classical_pipeline(
-        classical_cfg,
-
-    )
-    total = run_test_pipeline()
-
-    save_results(total)
 
 
 if __name__ == "__main__":

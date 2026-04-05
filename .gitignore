@@ -180,3 +180,11 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+# Dataset and training result folders
+CelebA/
+data/test/
+data/train/
+data/val/
+results/
+checkpoints/
