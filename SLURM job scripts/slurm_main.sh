@@ -44,7 +44,7 @@ nvidia-smi || echo "nvidia-smi not available"
 # Run main pipeline
 # -------------------------
 echo "Running main.py..."
-python -u main.py
+python -u main.py bichannel
 
 # -------------------------
 # Done

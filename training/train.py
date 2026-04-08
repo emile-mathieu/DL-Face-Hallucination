@@ -1,22 +1,18 @@
 import os
 import torch
+import torch.nn as nn
+import torch.optim as optim
 from utils.logger import save_metrics_to_csv
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-
-def psnr(pred, target):
-    mse = torch.mean((pred - target) ** 2)
-    mse = torch.clamp(mse, min=1e-10)
-    return 10 * torch.log10(1.0 / mse)
-
-
-def ensure_dir(path):
-    if path:
-        os.makedirs(path, exist_ok=True)
+from utils.utils import (
+    ensure_dir,
+    psnr, 
+    ssim,
+    save_bichannel_checkpoint
+)
 
 #deleted denormalise_batch function and updated functions below to denormalise within 
 def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6):
     model.eval()
-    ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
     total_loss = total_psnr = total_ssim = 0.0
     total_batches = 0
@@ -42,12 +38,9 @@ def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6):
             pred = torch.clamp(pred, 0.0, 1.0)
             target = torch.clamp(target, 0.0, 1.0)
 
-            batch_psnr = psnr(pred, target)
-            batch_ssim = ssim_metric(pred, target)
-            
             total_loss += loss.item()
-            total_psnr += batch_psnr.item()
-            total_ssim += batch_ssim.item()
+            total_psnr += psnr(pred, target)
+            total_ssim += ssim(pred, target)
             total_batches += 1
 
             if batch_idx == 0:
@@ -89,7 +82,6 @@ def train(
 
     for epoch in range(num_epochs):
         model.train()
-        train_ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
         
         epoch_loss = epoch_psnr = epoch_ssim = 0.0
         total_batches = 0
@@ -120,8 +112,8 @@ def train(
                 pred, target = pred.clamp(0, 1), target.clamp(0, 1)
 
             epoch_loss += loss.item()
-            epoch_psnr += psnr(pred, target).item()
-            epoch_ssim += train_ssim_metric(pred, target).item()
+            epoch_psnr += psnr(pred, target)
+            epoch_ssim += ssim(pred, target)
             total_batches += 1
 
         if total_batches == 0:
@@ -180,3 +172,48 @@ def train(
                 best_model_path,
             )
             print(f"New best model saved to {best_model_path} with val loss: {best_val_loss:.4f}")
+
+
+
+def run_train_pipeline(
+    model, 
+    model_cfg, 
+    train_loader, 
+    val_loader, 
+    device,
+    model_ckpt_path
+):
+
+    criterion = nn.MSELoss()
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=model_cfg["lr"],
+        momentum=0.9,
+        weight_decay=model_cfg["weight_decay"],
+    )
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=model_cfg["patience"],
+        min_lr=model_cfg["min_lr"],
+    )
+
+    # The updated train function expects 4 items from the loader
+    train(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        device=device,
+        num_epochs=model_cfg["num_epochs"],
+        scheduler=scheduler,
+        eps=1e-6 # Matching your function signature
+    )
+
+    if model_cfg["save_after_train"]:
+        # We pass None for global mean/std since we use per-image stats now
+        save_bichannel_checkpoint(model, None, None, model_ckpt_path)
+
+    return model
