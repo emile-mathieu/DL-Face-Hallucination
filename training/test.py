@@ -6,7 +6,7 @@ from typing import List
 import csv
 from torch.utils.data import DataLoader
 
-from data.dataset import denormalize_per_image, FixedTestFaceDataset
+from data.dataset import denormalize_per_image
 from training.inference import save_sample_outputs, load_model
 from utils.utils import psnr, ssim, save_rgb_image
 

@@ -8,7 +8,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from config import CONFIG
-from data.dataset import FaceDataset, Classical_FaceDataset, FixedTestFaceDataset
+from data.dataset import FaceDataset
 from data.dataloader import (
     get_test_loader, 
     get_train_loader, 
@@ -88,7 +88,7 @@ def main(mode="bichannel"):
     if model_cfg["load_if_exists"] and os.path.exists(model_ckpt_path):
         model, _, _ = load_bichannel_checkpoint(model, model_ckpt_path, device)
     else:
-        print(f"Training {"BiChannel" if mode=="bichannel" else "Basic"} CNN with per-image normalization...")
+        print(f"Training {'BiChannel' if mode=='bichannel' else 'Basic'} CNN with per-image normalization...")
         model = run_train_pipeline(
             model, 
             model_cfg, 
