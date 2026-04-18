@@ -26,7 +26,7 @@ SPLITS_DIR  = Path("C:/Users/julia/Desktop/splits_basiccnn")
 RESULTS_DIR = Path("C:/Users/julia/Desktop/results_classical")
 IMAGE_DIR   = WORKDIR / "img_align_celeba"
 
-SEED         = 42
+SEED         = 43
 HR_SIZE      = (100, 100)
 TEST_LR_SIZE = (50, 50)
 
@@ -34,26 +34,26 @@ CELEBA_CROP = True
 CROP_FRAC   = 0.6
 
 max_images = 100
-N_TRAIN    = 20     
-N_TEST     = 5      
+N_TRAIN    = 200     
+N_TEST     = 50      
 USE_SPLITS = True
 
 # SC1 parameters 
 SC1_PATCH_SIZE = 5        
-SC1_DICT_SIZE  = 1024      
+SC1_DICT_SIZE  = 256   
 SC1_LAMBDA     = 0.1
-SC1_N_TRAIN    = 15       
-SC1_ISTA_ITERS = 50      
+SC1_N_TRAIN    = 200       
+SC1_ISTA_ITERS = 30      
 
 # SC2 parameters 
 SC2_PATCH_SIZE = 5    
 SC2_SIGMA_K    = 0.12     
 SC2_LAMBDA_REG = 0.05     
-SC2_N_BASIS    = 1024     
-SC2_N_TRAIN    = 15
+SC2_N_BASIS    = 256     
+SC2_N_TRAIN    = 200
 
-# SFH parameters
-SFH_MAX_EXEMPLARS = 25 
+# SFH
+SFH_MAX_EXEMPLARS = 25    # fine as-is
 
 # ============================================================
 # Dataset Utilities
