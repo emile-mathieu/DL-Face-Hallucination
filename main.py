@@ -190,17 +190,6 @@ def main(mode="bichannel", task="all"):
             totals[cnn_label]["ssim"] += results[2]
             totals[cnn_label]["count"] += results[3]
 
-        """
-        ### NOT IMPLEMENTED YET ###
-        classical_test_ds = get_classical_train_dataset(test_path, max_items=test_cfg["test_max_samples"],
-                                                        blur_type="motion", motion_length=length, base_seed=42)
-        
-        classical_results = classical_evaluate_motion(classical_models, classical_test_ds, 
-                                                      lr_size, hr_size, device, save_cfg=save_cfg)
-        totals["bichannel"]["psnr"] += classical_results[1]
-        totals["bichannel"]["ssim"] += classical_results[2]
-        totals["bichannel"]["count"] += classical_results[3]
-        """
             for model_name, vals in totals.items():
                 avg_psnr = vals["psnr"]
                 avg_ssim = vals["ssim"]
