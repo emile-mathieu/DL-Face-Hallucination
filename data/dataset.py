@@ -19,7 +19,7 @@ def normalize_per_image(img: np.ndarray, eps: float = 1e-8
 
 #per-image denormalisation:  undo the tanh, then undo the z-normalisation
 def denormalize_per_image(img: torch.Tensor, mean: np.ndarray,
-                           std: np.ndarray, eps: float = 1e-6) -> torch.Tensor:
+                           std: np.ndarray, eps: float = 1e-3) -> torch.Tensor:
     mt = torch.tensor(mean, dtype=img.dtype, device=img.device).view(3, 1, 1)
     st = torch.tensor(std,  dtype=img.dtype, device=img.device).view(3, 1, 1)
     return torch.clamp(torch.atanh(img.clamp(-1+eps, 1-eps)) * st + mt, 0.0, 1.0)
@@ -100,6 +100,7 @@ class FaceDataset(Dataset):
         self.blur_type = blur_type
         self.gaussian_sigma = gaussian_sigma
         self.motion_length = motion_length
+        self.base_seed = base_seed
         if blur_type == "gaussian" and gaussian_sigma is None:
             raise ValueError("gaussian_sigma required")
         if blur_type == "motion" and (motion_length is None or base_seed is None):

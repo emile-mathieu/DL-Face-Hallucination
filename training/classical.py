@@ -182,9 +182,11 @@ def classical_evaluate_sigma(
         save_first_n = 0
         sigma = 2
     
-    total_psnr = 0
-    total_ssim = 0
-    counts = 0
+    totals = {
+        "sc1": {"psnr": 0.0, "ssim": 0.0, "count": 0},
+        "sc2": {"psnr": 0.0, "ssim": 0.0, "count": 0},
+        "sfh": {"psnr": 0.0, "ssim": 0.0, "count": 0},
+    }
 
     print(f"Running Classical Evaluation (N={num_classical})...")
     for idx in range(num_classical):
@@ -205,15 +207,19 @@ def classical_evaluate_sigma(
 
         for name, img_np in preds.items():
             p_t = torch.from_numpy(img_np).permute(2,0,1).unsqueeze(0).to(device)
-            total_psnr += psnr(p_t, hr_t)
-            total_ssim += ssim(p_t, hr_t)
-            counts += 1
+            totals[name]["psnr"] += psnr(p_t, hr_t)
+            totals[name]["ssim"] += ssim(p_t, hr_t)
+            totals[name]["count"] += 1
 
             if idx < save_first_n:
                 save_rgb_image(os.path.join(images_dir, f"{params}{params_val}_img{idx:03d}_{name}.png"), img_np)
 
+    for name in totals:
+        c = max(totals[name]["count"], 1)
+        totals[name]["psnr"] /= c
+        totals[name]["ssim"] /= c
 
-    return total_psnr/counts, total_ssim/counts, counts
+    return totals
 
 
 def classical_evaluate_motion(

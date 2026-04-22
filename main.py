@@ -131,9 +131,9 @@ def main(mode="bichannel"):
             "params_val": sigma
         }
         
-        totals = totals_container.copy()
+        totals = {k: {"psnr": 0.0, "ssim": 0.0, "count": 0} for k in totals_container}
 
-        test_loader = get_test_loader(test_path, blur_type="gaussian", gaussian_sigma=sigma, save_cfg=save_cfg)
+        test_loader = get_test_loader(test_path, blur_type="gaussian", gaussian_sigma=sigma)
         results = evaluate_one_test_setting(model, test_loader, device)
         totals["bichannel"]["psnr"] += results[1]
         totals["bichannel"]["ssim"] += results[2]
@@ -143,9 +143,10 @@ def main(mode="bichannel"):
                                                         blur_type="gaussian", gaussian_sigma=sigma)
         classical_results = classical_evaluate_sigma(classical_models, classical_test_ds, 
                                                      lr_size, hr_size, device, save_cfg)
-        totals["bichannel"]["psnr"] += classical_results[1]
-        totals["bichannel"]["ssim"] += classical_results[2]
-        totals["bichannel"]["count"] += classical_results[3]
+        for name in ("sc1", "sc2", "sfh"):
+            totals[name]["psnr"] += classical_results[name]["psnr"]
+            totals[name]["ssim"] += classical_results[name]["ssim"]
+            totals[name]["count"] += classical_results[name]["count"]
 
         for model_name, vals in totals.items():
             avg_psnr = vals["psnr"]
@@ -165,7 +166,7 @@ def main(mode="bichannel"):
             "params_val": length
         }
         
-        totals = totals_container.copy()
+        totals = {k: {"psnr": 0.0, "ssim": 0.0, "count": 0} for k in totals_container}
 
         test_loader = get_test_loader(test_path, blur_type="motion", motion_length=length, base_seed=42)
         results = evaluate_one_test_setting(model, test_loader, device, save_cfg=save_cfg)

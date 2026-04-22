@@ -10,6 +10,12 @@ from data.dataset import denormalize_per_image
 from training.inference import save_sample_outputs, load_model
 from utils.utils import psnr, ssim, save_rgb_image
 
+
+def _unpack_model_output(model_out):
+    if isinstance(model_out, tuple):
+        return model_out[0], model_out[1]
+    return model_out, None
+
 # -------------------------
 # Test on best model 
 # -------------------------
@@ -32,11 +38,12 @@ def evaluate_one_test_setting(model, dataloader, device, save_cfg=None):
     with torch.no_grad():
         for Iin, IH, mean_b, std_b in dataloader:
             Iin, IH = Iin.to(device).float(), IH.to(device).float()
-            outputs, alpha = model(Iin)
+            outputs, alpha = _unpack_model_output(model(Iin))
             total_loss += criterion(outputs, IH).item()
-            total_am    += alpha.mean().item()
-            total_amin  += alpha.min().item()
-            total_amax  += alpha.max().item()
+            if alpha is not None:
+                total_am += alpha.mean().item()
+                total_amin += alpha.min().item()
+                total_amax += alpha.max().item()
             for b in range(outputs.shape[0]):
                 pred = denormalize_per_image(outputs[b],  mean_b[b].numpy(), std_b[b].numpy())
                 target = denormalize_per_image(IH[b],   mean_b[b].numpy(), std_b[b].numpy())
@@ -52,6 +59,7 @@ def evaluate_one_test_setting(model, dataloader, device, save_cfg=None):
                     save_rgb_image(os.path.join(images_dir, f"{params}{params_val}_img{n-1:03d}_hr.png"), hr_ref)
 
     nb = len(dataloader)
-    print(f"  alpha mean={total_am/nb:.4f} min={total_amin/nb:.4f} max={total_amax/nb:.4f}")
+    if nb > 0 and total_am > 0:
+        print(f"  alpha mean={total_am/nb:.4f} min={total_amin/nb:.4f} max={total_amax/nb:.4f}")
     return total_loss / nb, total_psnr / n, total_ssim / n, n
 

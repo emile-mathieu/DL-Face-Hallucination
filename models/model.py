@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 # 1. CNN feature extractor
 # 2. Reconstruction branch
@@ -52,18 +53,23 @@ class BiChannelCNN(nn.Module):
         # 2nd layer: input 100 features, outputs 1 value
         self.fc2_2 = nn.Linear(100, 1)
 
-        # initialize all conv and linear weights with N(0, 0.001^2)
-        # and all biases to 0
+        # 5.9 init: orthogonal conv + fan-in-scaled linear layers.
         self._initialize_weights()
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                nn.init.normal_(m.weight, mean=0.0, std=0.001)
+            if isinstance(m, nn.Conv2d):
+                nn.init.orthogonal_(m.weight, gain=0.6)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+            elif isinstance(m, nn.Linear):
+                fan_in = m.weight.shape[1]
+                std = 1.0 / math.sqrt(fan_in)
+                nn.init.normal_(m.weight, mean=0.0, std=std)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0.0)
 
-    def forward(self, x):
+    def forward(self, x, return_alpha: bool = False):
 
         # for skip connection
         input_image = x
@@ -93,10 +99,10 @@ class BiChannelCNN(nn.Module):
             align_corners=False,
         )
 
-        print("alpha mean:", alpha.mean().item())
-
         # formula for blending
         output = alpha * i_up + (1 - alpha) * i_rec
+        if return_alpha:
+            return output, alpha
         return output
 
 class BasicCNN(nn.Module):
@@ -120,6 +126,20 @@ class BasicCNN(nn.Module):
         # Single Branch 
         self.fc1 = nn.Linear(2048, 2000)
         self.fc2 = nn.Linear(2000, 3 * 100 * 100)
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.orthogonal_(m.weight, gain=0.6)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+            elif isinstance(m, nn.Linear):
+                fan_in = m.weight.shape[1]
+                std = 1.0 / math.sqrt(fan_in)
+                nn.init.normal_(m.weight, mean=0.0, std=std)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
 
     def forward(self, x):
 

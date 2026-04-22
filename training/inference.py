@@ -10,6 +10,12 @@ from torch.utils.data import DataLoader
 from data.dataset import denormalize_per_image
 
 
+def _unpack_model_output(model_out):
+    if isinstance(model_out, tuple):
+        return model_out[0], model_out[1]
+    return model_out, None
+
+
 def ensure_dir(path):
     if path:
         os.makedirs(path, exist_ok=True)
@@ -28,7 +34,7 @@ def save_sample_outputs(model, dataset, device, save_dir: Path):
     with torch.no_grad():
         Iin, IH, mean_b, std_b = next(iter(loader))
         Iin, IH = Iin.to(device).float(), IH.to(device).float()
-        outputs, alpha = model(Iin)
+        outputs, _ = _unpack_model_output(model(Iin))
         save_image(denormalize_per_image(Iin[0], mean_b[0].numpy(), std_b[0].numpy()),
                    save_dir / "sample_lr.png")
         save_image(denormalize_per_image(outputs[0], mean_b[0].numpy(), std_b[0].numpy()),
@@ -78,7 +84,7 @@ def test_single_image(
         Iin = Iin.to(device).float()
         IH = IH.to(device).float()
 
-        outputs, _ = model(Iin)
+        outputs, _ = _unpack_model_output(model(Iin))
 
         idx = image_index_in_batch
 

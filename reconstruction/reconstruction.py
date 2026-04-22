@@ -556,7 +556,13 @@ class SR1_SC1_Classical:
                 if fn < 1e-8:
                     continue
 
-                hp = (self.Dh @ self._ista(feat / fn)).reshape(hps, hps)
+                feat_n = feat / fn
+                alpha = self._ista(feat_n)
+                # Confidence-gated residual limits over-sharpening on mild blur.
+                recon_feat = self.Dl @ alpha
+                conf = 1.0 - np.linalg.norm(feat_n - recon_feat) / (np.linalg.norm(feat_n) + 1e-6)
+                conf = float(np.clip(conf, 0.0, 1.0))
+                hp = ((self.Dh @ alpha) * conf * 0.4).reshape(hps, hps)
 
                 rh, ch_idx = r * us, c * us
                 rh2 = min(rh + hps, H)
@@ -789,7 +795,8 @@ class SR2_SC2_Kim_KRR:
                     continue
 
                 k = self._kern(self.B, (feat / fn).reshape(1, -1)).ravel()
-                hp = (k @ self.A).reshape(hps, hps)
+                conf = float(np.clip(np.max(k), 0.0, 1.0))
+                hp = ((k @ self.A) * conf).reshape(hps, hps)
 
                 rh, ch_idx = r * us, c * us
                 rh2 = min(rh + hps, H)
@@ -904,7 +911,7 @@ class SR3_SFH:
     # ----------------------------------------------------------
     # Exemplar search
     # ----------------------------------------------------------
-    def _best_exemplar(self, lr_q: np.ndarray) -> np.ndarray:
+    def _best_exemplar(self, lr_q: np.ndarray) -> Tuple[np.ndarray, float]:
         q = lr_q.ravel().astype(np.float64)
         q -= q.mean()
         qn = np.linalg.norm(q) + 1e-8
@@ -920,15 +927,19 @@ class SR3_SFH:
                 best_score = score
                 best_hr = hr_e
 
-        return best_hr
+        return best_hr, float(best_score)
 
     # ----------------------------------------------------------
     # Per-channel reconstruction
     # ----------------------------------------------------------
     def _reconstruct_channel(self, lr: np.ndarray) -> np.ndarray:
         """lr: 2-D float32 at LR resolution."""
-        best_hr = self._best_exemplar(lr)
+        best_hr, exemplar_conf = self._best_exemplar(lr)
         lr_up = cv2.resize(lr, self.hr_size, interpolation=cv2.INTER_CUBIC)
+
+        # Global quality gate dampens hallucination when LR input is already sharp.
+        lap_var = cv2.Laplacian(lr.astype(np.float32), cv2.CV_32F).var()
+        quality_gate = 1.0 if lap_var < 0.01 else 0.4
 
         gx_lr = cv2.Sobel(lr_up, cv2.CV_64F, 1, 0, ksize=3)
         gy_lr = cv2.Sobel(lr_up, cv2.CV_64F, 0, 1, ksize=3)
@@ -947,7 +958,8 @@ class SR3_SFH:
             cv2.Sobel(gx_out, cv2.CV_64F, 1, 0, ksize=3)
             + cv2.Sobel(gy_out, cv2.CV_64F, 0, 1, ksize=3)
         )
-        hr_rec = (lr_up + 0.08 * div).astype(np.float32)
+        gain = 0.08 * max(0.0, exemplar_conf) * quality_gate
+        hr_rec = (lr_up + gain * div).astype(np.float32)
 
         # Back-projection refinement
         for _ in range(20):
