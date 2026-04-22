@@ -1,15 +1,31 @@
-4 main job scripts
-1. Train Bi-channel CNN
-2. Train Basic CNN
-3. Run eval_baselines once, passing both checkpoints
-- This trains SC1 and SC2
-- Builds SFH from SC1
-- Validates Bicubic/SC1/SC2/SFH
-- Tests all 4 methods (Bicubic, SC1, SC2, SFH)
-- Prints PSNR/SSIM for Gaussian σ=1,3,5 and motion l=2,6,9
-4. Run eval_motion and eval_Gaussian on to test bichannel CNN and basic CNN 
-- Prints PSNR/SSIM for Gaussian σ=1,3,5 and motion l=2,6,9
+Core SLURM scripts (cleaned)
 
-2 side job script: 
-1. Print table (original paper table 2) 
-2. Obtain sample image after preprocessing is done 
+1. slurm_train_basic.sh
+- Train Basic CNN.
+
+2. slurm_train_bichannel.sh
+- Train BiChannel CNN.
+
+3. slurm_eval_baselines.sh
+- Train/evaluate classical methods (SC1, SC2, SFH).
+
+4. slurm_eval_gaussian.sh
+- Evaluate trained CNN checkpoint on Gaussian settings.
+
+5. slurm_eval_motion.sh
+- Evaluate trained CNN checkpoint on motion settings.
+
+6. slurm_submit_all_three.sh
+- Orchestrator script: submits
+	- Basic training
+	- BiChannel training
+	- Classical baseline evaluation (after both training jobs succeed)
+
+Recommended usage
+
+- Single-command core pipeline:
+	- bash "SLURM job scripts/slurm_submit_all_three.sh"
+
+- Optional standalone evaluation jobs:
+	- sbatch "SLURM job scripts/slurm_eval_gaussian.sh"
+	- sbatch "SLURM job scripts/slurm_eval_motion.sh"
