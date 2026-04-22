@@ -17,29 +17,14 @@ conda activate DL2
 set -euo pipefail
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Train and evaluate SC1, SC2, SFH on CelebA; print Table-2-style PSNR/SSIM.
-# Uses CPU (sklearn/scipy); no GPU required. Optional: add --gres=gpu:1 if using face_alignment with CUDA for SFH.
+# Train/evaluate SC1, SC2, SFH using the organized codebase entrypoint.
 
-parent_dir="$(dirname "$(pwd)")"
-echo "$parent_dir"
-
-WORKDIR=$parent_dir
-DATA_ROOT=$parent_dir
-SAVE_DIR=$parent_dir/checkpoints
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${WORKDIR}"
 echo "PWD=$(pwd)"
 
 mkdir -p logs
 
-python CelebA2.py eval_baselines \
-  --data_root "${DATA_ROOT}" \
-  --seed 42 \
-  --train_hr_limit 1200 \
-  --val_hr_limit 0 \
-  --test_hr_limit 300 \
-  --train_pairs 600 \
-  --sr1_atoms 256 \
-  --sr2_anchors 8000 \
-  --sr2_knn 64 \
-  --metric_color_space y \
+python main.py --mode bichannel --task classical-only

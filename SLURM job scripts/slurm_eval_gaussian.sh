@@ -17,31 +17,15 @@ conda activate DL2
 set -euo pipefail
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Evaluate a trained model under Gaussian blur (sigma=1,3,5).
-# can switch between bichannel and basic by changing --model and checkpoint path accordingly
-# can change --metric_color_space to rgb or y for different metrics (e.g. PSNR in RGB vs Y channel)
+# Legacy wrapper name kept for compatibility.
+# Uses main.py evaluation (includes Gaussian and motion outputs).
 
-parent_dir="$(dirname "$(pwd)")"
-echo "$parent_dir"
-
-WORKDIR=$parent_dir
-DATA_ROOT=$parent_dir
-SAVE_DIR=$parent_dir/checkpoints
-CKPT="${SAVE_DIR}/basic_mixed.pt"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${WORKDIR}"
 echo "PWD=$(pwd)"
-echo "CKPT=${CKPT}"
 
 mkdir -p logs
 
-test -f "${CKPT}" || { echo "Checkpoint not found: ${CKPT}"; ls -lah "${SAVE_DIR}"; exit 1; }
-
-python CelebA2.py eval_gaussian \
-  --data_root "${DATA_ROOT}" \
-  --model basic \
-  --checkpoint "${CKPT}" \
-  --device cuda \
-  --batch_size 64 \
-  --metric_color_space rgb \
-  --seed 42
+python main.py --mode basic --task all
