@@ -30,7 +30,7 @@ def celeba_crop(pil_img: Image.Image, enabled: bool, crop_frac: float) -> Image.
         return pil_img
     w, h = pil_img.size
     frac = float(np.clip(crop_frac, 1e-3, 1.0))
-    side = max(1, int(min(w, h) * frac))
+    side = int(min(w, h) * frac)
     left = (w - side) // 2
     top = max(0, (h - side) // 2 + int(side * 0.15))
     return pil_img.crop((left, top, left + side, top + side))
