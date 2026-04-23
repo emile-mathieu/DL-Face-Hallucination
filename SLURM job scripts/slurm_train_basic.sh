@@ -39,4 +39,4 @@ nvidia-smi || true
 
 mkdir -p "${WORKDIR}/logs"
 
-python main.py --mode basic --task train-cnn
+python "${MAIN_PY}" --mode basic --task train-cnn

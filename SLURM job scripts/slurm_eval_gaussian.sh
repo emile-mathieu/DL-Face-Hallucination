@@ -37,4 +37,4 @@ echo "Using entrypoint: ${MAIN_PY}"
 
 mkdir -p "${WORKDIR}/logs"
 
-python main.py --mode basic --task all
+python "${MAIN_PY}" --mode basic --task all

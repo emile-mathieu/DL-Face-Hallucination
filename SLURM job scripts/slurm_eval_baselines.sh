@@ -36,4 +36,4 @@ echo "Using entrypoint: ${MAIN_PY}"
 
 mkdir -p "${WORKDIR}/logs"
 
-python main.py --mode bichannel --task classical-only
+python "${MAIN_PY}" --mode bichannel --task classical-only
