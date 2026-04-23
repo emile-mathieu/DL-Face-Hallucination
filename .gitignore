@@ -188,3 +188,7 @@ data/train/
 data/val/
 results/
 checkpoints/
+
+# Dependencies
+.DS_Store
+.ds_store
