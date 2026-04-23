@@ -46,9 +46,11 @@ def gaussian_blur(img, sigma=None):
 
 def motion_blur(img, length=None, theta=None, base_seed=None):
     if length is None:
-        length = random.randint(2, 11)
+        length = random.randint(0, 11)
+    if length <= 1:
+        return img.astype(np.float32)
     if theta is None:
-        if base_seed:
+        if base_seed is not None:
             theta = random.Random(base_seed).uniform(-math.pi, math.pi)
         else:
             theta = random.uniform(-math.pi, math.pi)

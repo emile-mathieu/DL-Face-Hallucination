@@ -2,6 +2,8 @@ import os
 import numpy as np
 import torch
 import cv2
+import math
+import random
 from reconstruction.reconstruction import (
     SR1_SC1_Yang_FeatureResidual,
     SR2_SC2_Kim_KRR,
@@ -73,6 +75,30 @@ def gaussian_blur_with_sigma(img, sigma):
 
 def make_lr_from_hr_sigma(hr_img, sigma, lr_size):
     blurred = gaussian_blur_with_sigma(hr_img, sigma)
+    lr_img = cv2.resize(blurred, lr_size, interpolation=cv2.INTER_CUBIC)
+    return np.clip(lr_img, 0.0, 1.0).astype(np.float32)
+
+
+def motion_kernel(length: int, theta: float) -> np.ndarray:
+    length = max(2, int(length))
+    kernel = np.zeros((length, length), dtype=np.float32)
+    c = (length - 1) / 2.0
+    x0 = int(round(c - c * math.cos(theta)))
+    y0 = int(round(c - c * math.sin(theta)))
+    x1 = int(round(c + c * math.cos(theta)))
+    y1 = int(round(c + c * math.sin(theta)))
+    cv2.line(kernel, (x0, y0), (x1, y1), 1, thickness=1)
+    s = kernel.sum()
+    if s > 0:
+        kernel /= s
+    else:
+        kernel[length // 2, length // 2] = 1.0
+    return kernel
+
+
+def make_lr_from_hr_motion(hr_img, length, idx, lr_size, base_seed=42):
+    theta = random.Random(base_seed + idx).uniform(-math.pi, math.pi)
+    blurred = cv2.filter2D(hr_img, -1, motion_kernel(length, theta))
     lr_img = cv2.resize(blurred, lr_size, interpolation=cv2.INTER_CUBIC)
     return np.clip(lr_img, 0.0, 1.0).astype(np.float32)
 
@@ -161,13 +187,18 @@ def classical_train(
 
 # Evaluate classical methods for sigma
 
-def classical_evaluate_sigma(
+def classical_evaluate_setting(
         classical_models,
         classical_test_ds,
         lr_size,
         hr_size,
         device,
-        save_cfg
+    save_cfg,
+    blur_type="gaussian",
+    gaussian_sigma=None,
+    motion_length=None,
+    base_seed=42,
+    metric_channel="y",
     ):
 
     sc1, sc2, sfh = classical_models
@@ -177,10 +208,11 @@ def classical_evaluate_sigma(
         save_first_n = save_cfg["save_first_n"]
         images_dir = save_cfg["images_dir"]
         params = save_cfg["params"]
-        sigma = params_val = save_cfg["params_val"]
+        params_val = save_cfg["params_val"]
     except:
         save_first_n = 0
-        sigma = 2
+        params = blur_type
+        params_val = gaussian_sigma if blur_type == "gaussian" else motion_length
     
     totals = {
         "sc1": {"psnr": 0.0, "ssim": 0.0, "count": 0},
@@ -193,8 +225,19 @@ def classical_evaluate_sigma(
         _, hr_img = classical_test_ds[idx]
         hr_img = np.clip(hr_img, 0.0, 1.0).astype(np.float32)
 
-        # Generate synthetic inputs for classical models
-        lr50 = make_lr_from_hr_sigma(hr_img, sigma=sigma, lr_size=lr_size)
+        # Generate synthetic inputs for classical models.
+        if blur_type == "gaussian":
+            lr50 = make_lr_from_hr_sigma(hr_img, sigma=gaussian_sigma, lr_size=lr_size)
+        elif blur_type == "motion":
+            lr50 = make_lr_from_hr_motion(
+                hr_img,
+                length=motion_length,
+                idx=idx,
+                lr_size=lr_size,
+                base_seed=base_seed,
+            )
+        else:
+            raise ValueError(f"Unsupported blur_type: {blur_type}")
         lr100 = bicubic_to_hr(lr50, hr_size=hr_size)
 
         preds = {
@@ -207,8 +250,8 @@ def classical_evaluate_sigma(
 
         for name, img_np in preds.items():
             p_t = torch.from_numpy(img_np).permute(2,0,1).unsqueeze(0).to(device)
-            totals[name]["psnr"] += psnr(p_t, hr_t)
-            totals[name]["ssim"] += ssim(p_t, hr_t)
+            totals[name]["psnr"] += psnr(p_t, hr_t, channel=metric_channel)
+            totals[name]["ssim"] += ssim(p_t, hr_t, channel=metric_channel)
             totals[name]["count"] += 1
 
             if idx < save_first_n:
@@ -222,12 +265,45 @@ def classical_evaluate_sigma(
     return totals
 
 
+def classical_evaluate_sigma(
+        classical_models,
+        classical_test_ds,
+        lr_size,
+        hr_size,
+        device,
+    save_cfg,
+    metric_channel="y",
+    ):
+    return classical_evaluate_setting(
+        classical_models,
+        classical_test_ds,
+        lr_size,
+        hr_size,
+        device,
+        save_cfg,
+        blur_type="gaussian",
+        gaussian_sigma=save_cfg.get("params_val", 2),
+        metric_channel=metric_channel,
+    )
+
+
 def classical_evaluate_motion(
         classical_models,
         classical_test_ds,
         lr_size,
         hr_size,
         device,
-        save_cfg
+    save_cfg,
+    metric_channel="y",
     ):
-    pass
+    return classical_evaluate_setting(
+        classical_models,
+        classical_test_ds,
+        lr_size,
+        hr_size,
+        device,
+        save_cfg,
+        blur_type="motion",
+        motion_length=save_cfg.get("params_val", 2),
+        metric_channel=metric_channel,
+    )

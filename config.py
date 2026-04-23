@@ -8,6 +8,10 @@ CONFIG = {
         "crop_frac": 0.6,
     },
 
+    "metrics": {
+        "channel": "y",
+    },
+
     "paths": {
         "root_dir": ROOT_DIR,
         "train_dir": os.path.join(ROOT_DIR, "data", "train"),
@@ -43,6 +47,8 @@ CONFIG = {
         "lr_t_max": 8,
         "keep_last_n": 3,
         "checkpoint_name": "bichannel.pth",
+        "preload_basic_checkpoint": True,
+        "basic_checkpoint_name": "basic.pth",
         "load_if_exists": True,
         "save_after_train": True,
         "num_workers": 2

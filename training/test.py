@@ -19,7 +19,7 @@ def _unpack_model_output(model_out):
 # -------------------------
 # Test on best model 
 # -------------------------
-def evaluate_one_test_setting(model, dataloader, device, save_cfg=None):
+def evaluate_one_test_setting(model, dataloader, device, save_cfg=None, metric_channel="y"):
     criterion = nn.MSELoss()
     model.eval()
     total_loss = total_psnr = total_ssim = n = 0
@@ -47,8 +47,8 @@ def evaluate_one_test_setting(model, dataloader, device, save_cfg=None):
             for b in range(outputs.shape[0]):
                 pred = denormalize_per_image(outputs[b],  mean_b[b].numpy(), std_b[b].numpy())
                 target = denormalize_per_image(IH[b],   mean_b[b].numpy(), std_b[b].numpy())
-                total_psnr += psnr(pred, target)
-                total_ssim += ssim(pred, target)
+                total_psnr += psnr(pred, target, channel=metric_channel)
+                total_ssim += ssim(pred, target, channel=metric_channel)
                 n += 1
 
                 if n <= save_first_n:

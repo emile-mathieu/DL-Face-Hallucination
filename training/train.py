@@ -61,7 +61,7 @@ def _keep_last_n_checkpoints(checkpoint_dir, prefix, keep_last_n):
             pass
 
 #deleted denormalise_batch function and updated functions below to denormalise within 
-def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6):
+def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6, metric_channel="y"):
     model.eval()
 
     total_loss = total_psnr = total_ssim = 0.0
@@ -89,8 +89,8 @@ def evaluate_one_epoch(model, dataloader, criterion, device, eps=1e-6):
             target = torch.clamp(target, 0.0, 1.0)
 
             total_loss += loss.item()
-            total_psnr += psnr(pred, target)
-            total_ssim += ssim(pred, target)
+            total_psnr += psnr(pred, target, channel=metric_channel)
+            total_ssim += ssim(pred, target, channel=metric_channel)
             total_batches += 1
 
             if batch_idx == 0:
@@ -120,6 +120,7 @@ def train(
     train_metrics_csv_path="results/train_metrics.csv",
     val_metrics_csv_path="results/val_metrics.csv",
     best_model_path="checkpoints/best_bichannel.pth",
+    metric_channel="y",
 ):
 
     ensure_dir(os.path.dirname(train_metrics_csv_path))
@@ -162,8 +163,8 @@ def train(
                 pred, target = pred.clamp(0, 1), target.clamp(0, 1)
 
             epoch_loss += loss.item()
-            epoch_psnr += psnr(pred, target)
-            epoch_ssim += ssim(pred, target)
+            epoch_psnr += psnr(pred, target, channel=metric_channel)
+            epoch_ssim += ssim(pred, target, channel=metric_channel)
             total_batches += 1
 
         if total_batches == 0:
@@ -178,7 +179,8 @@ def train(
             dataloader=val_loader,
             criterion=criterion,
             device=device,
-            eps=eps
+            eps=eps,
+            metric_channel=metric_channel,
         )
 
         if scheduler is not None:
@@ -231,7 +233,8 @@ def run_train_pipeline(
     train_loader, 
     val_loader, 
     device,
-    model_ckpt_path
+    model_ckpt_path,
+    metric_channel="y",
 ):
 
     criterion = nn.MSELoss()
@@ -278,8 +281,8 @@ def run_train_pipeline(
                 pred, target = pred.clamp(0, 1), target.clamp(0, 1)
 
             epoch_loss += loss.item()
-            epoch_psnr += psnr(pred, target)
-            epoch_ssim += ssim(pred, target)
+            epoch_psnr += psnr(pred, target, channel=metric_channel)
+            epoch_ssim += ssim(pred, target, channel=metric_channel)
             total_batches += 1
 
         train_loss = epoch_loss / max(total_batches, 1)
@@ -292,6 +295,7 @@ def run_train_pipeline(
             criterion=criterion,
             device=device,
             eps=1e-6,
+            metric_channel=metric_channel,
         )
 
         scheduler.step()

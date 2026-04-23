@@ -19,8 +19,8 @@ from data.dataloader import (
 from models.model import BasicCNN, BiChannelCNN
 from training.train import run_train_pipeline
 from training.test import evaluate_one_test_setting
-from training.classical import classical_train, classical_evaluate_sigma
-from utils.utils import ensure_dir, load_bichannel_checkpoint
+from training.classical import classical_train, classical_evaluate_setting
+from utils.utils import ensure_dir, load_bichannel_checkpoint, load_basic_weights_into_bichannel
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,6 +39,7 @@ def main(mode="bichannel", task="all"):
 
     paths_cfg = CONFIG["paths"]
     pre_cfg = CONFIG.get("preprocessing", {})
+    metrics_cfg = CONFIG.get("metrics", {})
     sc1_cfg = CONFIG["sc1"]
     sc2_cfg = CONFIG["sc2"]
     sfh_cfg = CONFIG["sfh"]
@@ -61,6 +62,7 @@ def main(mode="bichannel", task="all"):
     lr_size = tuple(sc2_cfg["lr_size"])
     celeba_crop_enabled = pre_cfg.get("celeba_crop", True)
     crop_frac = pre_cfg.get("crop_frac", 0.6)
+    metric_channel = metrics_cfg.get("channel", "y")
 
 
 
@@ -102,6 +104,15 @@ def main(mode="bichannel", task="all"):
         if model_cfg["load_if_exists"] and os.path.exists(model_ckpt_path):
             model, _, _ = load_bichannel_checkpoint(model, model_ckpt_path, device)
         else:
+            if mode == "bichannel" and model_cfg.get("preload_basic_checkpoint", False):
+                basic_ckpt_path = os.path.join(
+                    checkpoints_dir,
+                    model_cfg.get("basic_checkpoint_name", CONFIG["basic"]["checkpoint_name"]),
+                )
+                if os.path.exists(basic_ckpt_path):
+                    model = load_basic_weights_into_bichannel(model, basic_ckpt_path, device)
+                else:
+                    print(f"[Info] Basic checkpoint not found for warm-start: {basic_ckpt_path}")
             print(f"Training {'BiChannel' if mode=='bichannel' else 'Basic'} CNN with per-image normalization...")
             model = run_train_pipeline(
                 model,
@@ -109,7 +120,8 @@ def main(mode="bichannel", task="all"):
                 train_loader,
                 val_loader,
                 device,
-                model_ckpt_path
+                model_ckpt_path,
+                metric_channel=metric_channel,
             )
         
 
@@ -166,7 +178,7 @@ def main(mode="bichannel", task="all"):
                 celeba_crop_enabled=celeba_crop_enabled,
                 crop_frac=crop_frac
             )
-            results = evaluate_one_test_setting(model, test_loader, device)
+            results = evaluate_one_test_setting(model, test_loader, device, metric_channel=metric_channel)
             totals[cnn_label]["psnr"] += results[1]
             totals[cnn_label]["ssim"] += results[2]
             totals[cnn_label]["count"] += results[3]
@@ -176,8 +188,17 @@ def main(mode="bichannel", task="all"):
                                                             blur_type="gaussian", gaussian_sigma=sigma,
                                                             celeba_crop_enabled=celeba_crop_enabled,
                                                             crop_frac=crop_frac)
-            classical_results = classical_evaluate_sigma(classical_models, classical_test_ds,
-                                                         lr_size, hr_size, device, save_cfg)
+            classical_results = classical_evaluate_setting(
+                classical_models,
+                classical_test_ds,
+                lr_size,
+                hr_size,
+                device,
+                save_cfg,
+                blur_type="gaussian",
+                gaussian_sigma=sigma,
+                    metric_channel=metric_channel,
+            )
             for name in ("sc1", "sc2", "sfh"):
                 totals[name]["psnr"] += classical_results[name]["psnr"]
                 totals[name]["ssim"] += classical_results[name]["ssim"]
@@ -191,7 +212,7 @@ def main(mode="bichannel", task="all"):
             print(f"Sigma={sigma} | {model_name:9} | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f} | N: {count}")
     
 
-    if run_cnn:
+    if run_cnn or run_classical:
         for length in test_cfg["lengths"]:
             print(f"\n--- Testing Motion Length: {length} ---")
 
@@ -204,18 +225,46 @@ def main(mode="bichannel", task="all"):
 
             totals = {k: {"psnr": 0.0, "ssim": 0.0, "count": 0} for k in totals_container}
 
-            test_loader = get_test_loader(
-                test_path,
-                blur_type="motion",
-                motion_length=length,
-                base_seed=42,
-                celeba_crop_enabled=celeba_crop_enabled,
-                crop_frac=crop_frac
-            )
-            results = evaluate_one_test_setting(model, test_loader, device, save_cfg=save_cfg)
-            totals[cnn_label]["psnr"] += results[1]
-            totals[cnn_label]["ssim"] += results[2]
-            totals[cnn_label]["count"] += results[3]
+            if run_cnn:
+                test_loader = get_test_loader(
+                    test_path,
+                    blur_type="motion",
+                    motion_length=length,
+                    base_seed=42,
+                    celeba_crop_enabled=celeba_crop_enabled,
+                    crop_frac=crop_frac
+                )
+                results = evaluate_one_test_setting(model, test_loader, device, save_cfg=save_cfg, metric_channel=metric_channel)
+                totals[cnn_label]["psnr"] += results[1]
+                totals[cnn_label]["ssim"] += results[2]
+                totals[cnn_label]["count"] += results[3]
+
+            if run_classical:
+                classical_test_ds = get_classical_train_dataset(
+                    test_path,
+                    max_items=test_cfg["test_max_samples"],
+                    blur_type="motion",
+                    motion_length=length,
+                    base_seed=42,
+                    celeba_crop_enabled=celeba_crop_enabled,
+                    crop_frac=crop_frac,
+                )
+                classical_results = classical_evaluate_setting(
+                    classical_models,
+                    classical_test_ds,
+                    lr_size,
+                    hr_size,
+                    device,
+                    save_cfg,
+                    blur_type="motion",
+                    motion_length=length,
+                    base_seed=42,
+                    metric_channel=metric_channel,
+                )
+                for name in ("sc1", "sc2", "sfh"):
+                    totals[name]["psnr"] += classical_results[name]["psnr"]
+                    totals[name]["ssim"] += classical_results[name]["ssim"]
+                    totals[name]["count"] += classical_results[name]["count"]
 
             for model_name, vals in totals.items():
                 avg_psnr = vals["psnr"]
