@@ -38,6 +38,7 @@ def main(mode="bichannel", task="all"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     paths_cfg = CONFIG["paths"]
+    pre_cfg = CONFIG.get("preprocessing", {})
     sc1_cfg = CONFIG["sc1"]
     sc2_cfg = CONFIG["sc2"]
     sfh_cfg = CONFIG["sfh"]
@@ -58,6 +59,8 @@ def main(mode="bichannel", task="all"):
 
     hr_size = tuple(sc2_cfg["hr_size"])
     lr_size = tuple(sc2_cfg["lr_size"])
+    celeba_crop_enabled = pre_cfg.get("celeba_crop", True)
+    crop_frac = pre_cfg.get("crop_frac", 0.6)
 
 
 
@@ -82,12 +85,16 @@ def main(mode="bichannel", task="all"):
         train_loader = get_train_loader(
             train_path,
             batch_size=model_cfg["batch_size"],
-            num_workers=model_cfg["num_workers"]
+            num_workers=model_cfg["num_workers"],
+            celeba_crop_enabled=celeba_crop_enabled,
+            crop_frac=crop_frac
         )
         val_loader = get_val_loader(
             val_path,
             batch_size=model_cfg["batch_size"],
-            num_workers=model_cfg["num_workers"]
+            num_workers=model_cfg["num_workers"],
+            celeba_crop_enabled=celeba_crop_enabled,
+            crop_frac=crop_frac
         )
 
         # 3. Load checkpoint if it exists, if not train from scratch.
@@ -109,7 +116,12 @@ def main(mode="bichannel", task="all"):
     # 4. Prepare classical models
     classical_models = None
     if run_classical:
-        classical_train_ds = get_classical_train_dataset(train_path, hr_size=hr_size)
+        classical_train_ds = get_classical_train_dataset(
+            train_path,
+            hr_size=hr_size,
+            celeba_crop_enabled=celeba_crop_enabled,
+            crop_frac=crop_frac
+        )
         classical_models = classical_train(
             classical_train_ds,
             classical_cfg,
@@ -147,7 +159,13 @@ def main(mode="bichannel", task="all"):
         totals = {k: {"psnr": 0.0, "ssim": 0.0, "count": 0} for k in totals_container}
 
         if run_cnn:
-            test_loader = get_test_loader(test_path, blur_type="gaussian", gaussian_sigma=sigma)
+            test_loader = get_test_loader(
+                test_path,
+                blur_type="gaussian",
+                gaussian_sigma=sigma,
+                celeba_crop_enabled=celeba_crop_enabled,
+                crop_frac=crop_frac
+            )
             results = evaluate_one_test_setting(model, test_loader, device)
             totals[cnn_label]["psnr"] += results[1]
             totals[cnn_label]["ssim"] += results[2]
@@ -155,7 +173,9 @@ def main(mode="bichannel", task="all"):
 
         if run_classical:
             classical_test_ds = get_classical_train_dataset(test_path, max_items=test_cfg["test_max_samples"],
-                                                            blur_type="gaussian", gaussian_sigma=sigma)
+                                                            blur_type="gaussian", gaussian_sigma=sigma,
+                                                            celeba_crop_enabled=celeba_crop_enabled,
+                                                            crop_frac=crop_frac)
             classical_results = classical_evaluate_sigma(classical_models, classical_test_ds,
                                                          lr_size, hr_size, device, save_cfg)
             for name in ("sc1", "sc2", "sfh"):
@@ -184,7 +204,14 @@ def main(mode="bichannel", task="all"):
 
             totals = {k: {"psnr": 0.0, "ssim": 0.0, "count": 0} for k in totals_container}
 
-            test_loader = get_test_loader(test_path, blur_type="motion", motion_length=length, base_seed=42)
+            test_loader = get_test_loader(
+                test_path,
+                blur_type="motion",
+                motion_length=length,
+                base_seed=42,
+                celeba_crop_enabled=celeba_crop_enabled,
+                crop_frac=crop_frac
+            )
             results = evaluate_one_test_setting(model, test_loader, device, save_cfg=save_cfg)
             totals[cnn_label]["psnr"] += results[1]
             totals[cnn_label]["ssim"] += results[2]

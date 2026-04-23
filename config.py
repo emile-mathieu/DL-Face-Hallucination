@@ -3,6 +3,11 @@ import os
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG = {
+    "preprocessing": {
+        "celeba_crop": True,
+        "crop_frac": 0.6,
+    },
+
     "paths": {
         "root_dir": ROOT_DIR,
         "train_dir": os.path.join(ROOT_DIR, "data", "train"),
@@ -25,7 +30,7 @@ CONFIG = {
         "checkpoint_name": "basic.pth",
         "load_if_exists": True,
         "save_after_train": True,
-        "num_workers": 10
+        "num_workers": 2
     },
 
     "bichannel": {
@@ -40,7 +45,7 @@ CONFIG = {
         "checkpoint_name": "bichannel.pth",
         "load_if_exists": True,
         "save_after_train": True,
-        "num_workers": 10
+        "num_workers": 2
     },
 
     "sc1": {

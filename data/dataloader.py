@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 # Made different DataLoader settings (e.g., batch size, shuffling) for each training stage.
 def get_test_loader(data_path, max_items=None,
                     blur_type=None, gaussian_sigma=None, 
-                    motion_length=None, base_seed=None):
+                    motion_length=None, base_seed=None,
+                    celeba_crop_enabled=True, crop_frac=0.6):
     
     dataset = FaceDataset(
         image_dir=data_path,
@@ -13,7 +14,9 @@ def get_test_loader(data_path, max_items=None,
         blur_type=blur_type,
         gaussian_sigma=gaussian_sigma,
         motion_length=motion_length,
-        base_seed=base_seed
+        base_seed=base_seed,
+        celeba_crop_enabled=celeba_crop_enabled,
+        crop_frac=crop_frac
     )
 
     dataloader = DataLoader(
@@ -25,8 +28,13 @@ def get_test_loader(data_path, max_items=None,
     return dataloader
 
 
-def get_val_loader(data_path, batch_size=32, num_workers=4):
-    dataset = FaceDataset(image_dir=data_path)
+def get_val_loader(data_path, batch_size=32, num_workers=4,
+                   celeba_crop_enabled=True, crop_frac=0.6):
+    dataset = FaceDataset(
+        image_dir=data_path,
+        celeba_crop_enabled=celeba_crop_enabled,
+        crop_frac=crop_frac
+    )
 
     dataloader = DataLoader(
         dataset,
@@ -38,8 +46,14 @@ def get_val_loader(data_path, batch_size=32, num_workers=4):
     return dataloader
 
 
-def get_train_loader(data_path, is_classical=False, batch_size=32, num_workers=4):
-    dataset = FaceDataset(image_dir=data_path, is_classical=is_classical)
+def get_train_loader(data_path, is_classical=False, batch_size=32, num_workers=4,
+                     celeba_crop_enabled=True, crop_frac=0.6):
+    dataset = FaceDataset(
+        image_dir=data_path,
+        is_classical=is_classical,
+        celeba_crop_enabled=celeba_crop_enabled,
+        crop_frac=crop_frac
+    )
 
     dataloader = DataLoader(
         dataset,
@@ -53,7 +67,8 @@ def get_train_loader(data_path, is_classical=False, batch_size=32, num_workers=4
 # Classical dataset
 def get_classical_train_dataset(data_path, max_items=None, hr_size=(100,100),
                                 blur_type=None, gaussian_sigma=None, 
-                                motion_length=None, base_seed=None):
+                                motion_length=None, base_seed=None,
+                                celeba_crop_enabled=True, crop_frac=0.6):
     dataset = FaceDataset(
         image_dir=data_path,
         max_items=max_items,
@@ -62,7 +77,9 @@ def get_classical_train_dataset(data_path, max_items=None, hr_size=(100,100),
         blur_type=blur_type,
         gaussian_sigma=gaussian_sigma,
         motion_length=motion_length,
-        base_seed=base_seed
+        base_seed=base_seed,
+        celeba_crop_enabled=celeba_crop_enabled,
+        crop_frac=crop_frac
     )
     return dataset
 

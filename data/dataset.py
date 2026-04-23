@@ -25,6 +25,17 @@ def denormalize_per_image(img: torch.Tensor, mean: np.ndarray,
     return torch.clamp(torch.atanh(img.clamp(-1+eps, 1-eps)) * st + mt, 0.0, 1.0)
 
 
+def celeba_crop(pil_img: Image.Image, enabled: bool, crop_frac: float) -> Image.Image:
+    if not enabled:
+        return pil_img
+    w, h = pil_img.size
+    frac = float(np.clip(crop_frac, 1e-3, 1.0))
+    side = max(1, int(min(w, h) * frac))
+    left = (w - side) // 2
+    top = max(0, (h - side) // 2 + int(side * 0.15))
+    return pil_img.crop((left, top, left + side, top + side))
+
+
 # Gaussian and motion blur, use specified parameters if any
 
 def gaussian_blur(img, sigma=None):
@@ -77,7 +88,8 @@ class FaceDataset(Dataset):
     def __init__(self, image_dir, max_items=None, 
                  is_classical=False, classical_hr_size=(100,100),
                  blur_type=None, gaussian_sigma=None, 
-                 motion_length=None, base_seed=None):
+                 motion_length=None, base_seed=None,
+                 celeba_crop_enabled=True, crop_frac=0.6):
         
         self.image_paths = [
             os.path.join(image_dir, img)
@@ -101,6 +113,8 @@ class FaceDataset(Dataset):
         self.gaussian_sigma = gaussian_sigma
         self.motion_length = motion_length
         self.base_seed = base_seed
+        self.celeba_crop_enabled = celeba_crop_enabled
+        self.crop_frac = crop_frac
         if blur_type == "gaussian" and gaussian_sigma is None:
             raise ValueError("gaussian_sigma required")
         if blur_type == "motion" and (motion_length is None or base_seed is None):
@@ -115,6 +129,7 @@ class FaceDataset(Dataset):
 
         # load HR image
         img = Image.open(path).convert("RGB")
+        img = celeba_crop(img, enabled=self.celeba_crop_enabled, crop_frac=self.crop_frac)
         img = img.resize(self.hr_size, Image.BICUBIC)
 
         # convert to [0,1]
