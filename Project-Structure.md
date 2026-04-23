@@ -1,101 +1,105 @@
-# 📁 Project Structure
+# Project Structure
 
-```project/
+```text
+Deep-Learning-Face-Hallucination/
+├── config.py
+├── main.py
+├── requirements.txt
+├── readme.md
+├── Project-Structure.md
 │
 ├── data/
-│   ├── dataset.py        # Loads images, creates LR/HR pairs, preprocessing
-│   └── dataloader.py     # Builds PyTorch DataLoader (batching, shuffle)
+│   ├── dataset.py
+│   └── dataloader.py
 │
 ├── models/
-│   └── model.py          # Bi-Channel CNN + Basic CNN architectures
+│   └── model.py
 │
 ├── training/
-│   ├── train.py          # Training loop (MSE, PSNR, SSIM, CSV logging, best model saving)
-│   ├── evaluate.py       # Evaluation loop (PSNR, SSIM, CSV logging)
-│   └── inference.py      # Runs model on single image + saves LR/SR/HR outputs
+│   ├── train.py
+│   ├── test.py
+│   ├── inference.py
+│   └── classical.py
+│
+├── reconstruction/
+│   ├── reconstruction.py
+│   └── test.py
 │
 ├── utils/
-│   └── logger.py         # CSV logging utility (train + eval metrics)
+│   ├── utils.py
+│   └── logger.py
 │
-├── results/
-│   ├── train_metrics.csv # Training metrics per epoch (PSNR, SSIM, loss)
-│   ├── eval_metrics.csv  # Evaluation results
-│   ├── best_model.pth    # Best model checkpoint (based on PSNR)
-│   └── images/           # Saved inference outputs (lr.png, sr.png, hr.png)
+├── setup/
+│   ├── environment.yml
+│   ├── setup.sh
+│   └── setup_data.py
 │
-└── main.py               # Entry point: train → save → evaluate
+├── SLURM job scripts/
+│   ├── readme.md
+│   ├── slurm_train_basic.sh
+│   ├── slurm_train_bichannel.sh
+│   ├── slurm_eval_baselines.sh
+│   ├── slurm_eval_gaussian.sh
+│   ├── slurm_eval_motion.sh
+│   └── slurm_submit_all_three.sh
+│
+├── checkpoints/                # generated at runtime
+├── results/                    # generated at runtime
+└── notebooks/
 ```
----
-# Pipeline Overview
-1. High-Res Image (IH)
-2. Blur + Downsample
-3. Low-Res Image (IL)
-4. Resize → (48×48)
-5. Model (Bi-Channel CNN)
-6. High-Res Output (100×100)
----
 
-# Components
+## Core Modules
 
-### data/
-- **dataset.py**
-  - Loads images
-  - Generates low-resolution inputs
-  - Applies preprocessing (resize + normalize)
+### `main.py`
+Unified pipeline entry point.
+- Selects mode: `basic` or `bichannel`
+- Selects task: `all`, `train-cnn`, `classical-only`
+- Coordinates training, evaluation, checkpoint loading, and CSV export
 
-- **dataloader.py**
-  - Creates batches using PyTorch `DataLoader`
+### `config.py`
+Centralized config for:
+- data/checkpoint/result paths
+- Basic/BiChannel hyperparameters
+- scheduler settings
+- SC1/SC2/SFH settings
+- test settings (sigma, motion length, sample limits)
 
----
+### `data/`
+- `dataset.py`: face dataset loading, degradation (gaussian/motion), per-image normalization
+- `dataloader.py`: train/val/test/classical dataloader builders
 
-### models/
-- **model.py**
-  - CNN feature extractor
-  - Reconstruction branch
-  - Alpha (fusion weight) branch
-  - Combines:
-    ```
-    Output = α * Upsampled Input + (1 - α) * Reconstruction
-    ```
+### `models/`
+- `model.py`: `BasicCNN` and `BiChannelCNN`
 
----
+### `training/`
+- `train.py`: CNN training loop, warmup-cosine scheduler, checkpoint rolling
+- `test.py`: CNN test-time evaluation helpers
+- `inference.py`: utility functions for sample output inference
+- `classical.py`: build/load/train/eval orchestration for SC1/SC2/SFH
 
-### training/
-- **train.py**
-  - Handles training loop
-  - Computes loss (MSE)
-  - Performs backpropagation
+### `reconstruction/`
+- `reconstruction.py`: classical super-resolution methods and shared routines
+- `test.py`: reconstruction testing helpers
 
-- **evaluate.py**
-  - Runs evaluation on validation set
-  - Computes metrics (PSNR, SSIM)
+### `utils/`
+- `utils.py`: metrics, checkpoint IO, pickle model IO, image saving
+- `logger.py`: CSV metric logging helper
 
-- **inference.py**
-  - Runs model on single image
-  - Saves generated outputs
+## Pipeline Overview
 
----
-### utils/
-- **logger.py**
-  - Utility for logging metrics to CSV files
+### CNN path
+1. Build dataloaders from `data/`
+2. Build model from `models/model.py`
+3. Train/load via `training/train.py`
+4. Evaluate via `training/test.py`
+5. Save model and metrics
 
-### main.py
-- Entry point of the project
-- Runs training, validation and testing depending on configuration
+### Classical path
+1. Build/load SC1, SC2, SFH via `training/classical.py`
+2. Use implementations from `reconstruction/reconstruction.py`
+3. Evaluate on configured test settings
+4. Save metrics and images
 
----
-
-# Input / Output
-
-| Type | Shape |
-|------|------|
-| Input (LR) | (B, 3, 48, 48) |
-| Output (HR) | (B, 3, 100, 100) |
-
----
-
-# Key Idea
-
-The model combines:
-- **Raw image information**
-- **Learned deep features**
+## Input / Output Shapes
+- Input (LR): `(B, 3, 48, 48)`
+- Output (HR): `(B, 3, 100, 100)`
