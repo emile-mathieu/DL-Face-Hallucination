@@ -21,11 +21,22 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+MAIN_PY="${WORKDIR}/main.py"
+
+if [[ ! -f "${MAIN_PY}" ]]; then
+  echo "ERROR: main.py not found at ${MAIN_PY}"
+  echo "DEBUG: SCRIPT_DIR=${SCRIPT_DIR}"
+  echo "DEBUG: WORKDIR=${WORKDIR}"
+  exit 1
+fi
 
 cd "${WORKDIR}"
 echo "PWD=$(pwd)"
+echo "Using entrypoint: ${MAIN_PY}"
 nvidia-smi || true
 
-mkdir -p logs
+mkdir -p "${WORKDIR}/logs"
 
 python main.py --mode basic --task train-cnn
