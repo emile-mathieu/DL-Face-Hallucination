@@ -1,18 +1,52 @@
 """Centralized configuration for julia_workings Python scripts."""
 
+import os
 from pathlib import Path
 
 
-_BASIC_WORKDIR = Path(
-	"/home/msai/ruijiane001/AI6301/Face-Hallucination/Deep-Learning-Face-Hallucination/julia_workings"
+def _load_dotenv(dotenv_path: Path) -> None:
+	"""Load simple KEY=VALUE pairs from a .env file into process env.
+
+	Existing environment variables are preserved.
+	"""
+	if not dotenv_path.exists():
+		return
+
+	for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+		line = raw_line.strip()
+		if not line or line.startswith("#") or "=" not in line:
+			continue
+		key, value = line.split("=", 1)
+		key = key.strip()
+		value = value.strip().strip('"').strip("'")
+		if key:
+			os.environ.setdefault(key, value)
+
+
+_THIS_DIR = Path(__file__).resolve().parent
+_load_dotenv(_THIS_DIR / ".env")
+
+
+# Shared environment-driven paths used by both bash and Python.
+COMMON_WORKDIR = Path(os.getenv("FH_WORKDIR", "/home/msds/tans0444"))
+COMMON_IMAGE_ROOT = Path(
+	os.getenv("FH_IMAGE_ROOT", str(COMMON_WORKDIR / "celeba" / "img_align_celeba"))
 )
-_BICHANNEL_WORKDIR = Path("/home/msds/tans0444")
-_CLASSICAL_WORKDIR = Path("C:/Users/julia/Desktop/celeba")
+COMMON_CHECKPOINT_DIR = Path(
+	os.getenv(
+		"FH_CHECKPOINT_DIR",
+		str(COMMON_WORKDIR / "results_bichannel" / "checkpoints"),
+	)
+)
+
+_BASIC_WORKDIR = COMMON_WORKDIR
+_BICHANNEL_WORKDIR = COMMON_WORKDIR
+_CLASSICAL_WORKDIR = COMMON_WORKDIR
 
 
 BASIC_CONFIG = {
 	"WORKDIR": _BASIC_WORKDIR,
-	"DEFAULT_IMAGE_ROOTS": [_BASIC_WORKDIR / "CelebA" / "img_align_celeba"],
+	"DEFAULT_IMAGE_ROOTS": [COMMON_IMAGE_ROOT],
 	"RESULTS_DIR": _BASIC_WORKDIR / "results_basiccnn",
 	"SPLITS_DIR": _BASIC_WORKDIR / "splits_basiccnn",
 	"CHECKPOINT_DIR": _BASIC_WORKDIR / "results_basiccnn" / "checkpoints",
@@ -43,10 +77,10 @@ BASIC_CONFIG = {
 
 BICHANNEL_CONFIG = {
 	"WORKDIR": _BICHANNEL_WORKDIR,
-	"DEFAULT_IMAGE_ROOTS": [_BICHANNEL_WORKDIR / "celeba" / "img_align_celeba"],
+	"DEFAULT_IMAGE_ROOTS": [COMMON_IMAGE_ROOT],
 	"RESULTS_DIR": _BICHANNEL_WORKDIR / "results_bichannel",
 	"SPLITS_DIR": _BICHANNEL_WORKDIR / "splits_bichannel",
-	"CHECKPOINT_DIR": _BICHANNEL_WORKDIR / "results_bichannel" / "checkpoints",
+	"CHECKPOINT_DIR": COMMON_CHECKPOINT_DIR,
 	"SEED": 42,
 	"MAX_IMAGES": 100_000,
 	"TRAIN_RATIO": 0.6,
@@ -76,9 +110,9 @@ BICHANNEL_CONFIG = {
 
 CLASSICAL_CONFIG = {
 	"WORKDIR": _CLASSICAL_WORKDIR,
-	"SPLITS_DIR": Path("C:/Users/julia/Desktop/splits_basiccnn"),
-	"RESULTS_DIR": Path("C:/Users/julia/Desktop/results_classical"),
-	"IMAGE_DIR": _CLASSICAL_WORKDIR / "img_align_celeba",
+	"SPLITS_DIR": _CLASSICAL_WORKDIR / "splits_basiccnn",
+	"RESULTS_DIR": _CLASSICAL_WORKDIR / "results_classical",
+	"IMAGE_DIR": COMMON_IMAGE_ROOT,
 	"SEED": 42,
 	"HR_SIZE": (100, 100),
 	"TEST_LR_SIZE": (50, 50),

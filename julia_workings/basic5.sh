@@ -11,11 +11,19 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+	set -a
+	source "$ENV_FILE"
+	set +a
+fi
+
 : "${CUDA_MODULE:=cuda/12.8.0}"
 : "${ANACONDA_MODULE:=anaconda}"
 : "${CONDA_ENV:=DL2}"
 : "${FH_WORKDIR:=/home/msds/tans0444}"
-: "${FH_IMAGE_ROOT:=/home/msds/tans0444/celeba/img_align_celeba}"
+: "${FH_IMAGE_ROOT:=${FH_WORKDIR}/celeba/img_align_celeba}"
 
 module load "$CUDA_MODULE"
 module load "$ANACONDA_MODULE"
@@ -28,7 +36,7 @@ export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 WORKDIR="$FH_WORKDIR" #change to your own directory
-SCRIPT_NAME=basic5.py
+SCRIPT_NAME=BasicCNN.py
 IMAGE_ROOT="$FH_IMAGE_ROOT" #change to your own directory 
 
 cd "$WORKDIR"
