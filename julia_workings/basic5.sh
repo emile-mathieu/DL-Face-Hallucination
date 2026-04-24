@@ -23,6 +23,7 @@ fi
 : "${CONDA_ENV:=DL2}"
 : "${FH_WORKDIR:=/home/msds/tans0444}"
 : "${FH_IMAGE_ROOT:=${FH_WORKDIR}/celeba/img_align_celeba}"
+: "${FH_BASIC_CHECKPOINT:=}"
 
 module load "$CUDA_MODULE"
 module load "$ANACONDA_MODULE"
@@ -37,6 +38,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 WORKDIR="$FH_WORKDIR" #change to your own directory
 SCRIPT_NAME=BasicCNN.py
 IMAGE_ROOT="$FH_IMAGE_ROOT" #change to your own directory 
+BASIC_CHECKPOINT="$FH_BASIC_CHECKPOINT"
 
 cd "$WORKDIR"
 
@@ -48,6 +50,15 @@ echo "CONDA_PREFIX=$CONDA_PREFIX"
 python -c "import sys; print(sys.executable)"
 python -c "import torch; print('torch:', torch.__version__); print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
 
-python "$SCRIPT_NAME" --image-root "$IMAGE_ROOT"
+if [ -n "$BASIC_CHECKPOINT" ]; then
+	if [ ! -f "$BASIC_CHECKPOINT" ]; then
+		echo "ERROR: checkpoint not found: $BASIC_CHECKPOINT"
+		exit 1
+	fi
+	echo "Resuming BasicCNN from checkpoint: $BASIC_CHECKPOINT"
+	python "$SCRIPT_NAME" --image-root "$IMAGE_ROOT" --resume "$BASIC_CHECKPOINT"
+else
+	python "$SCRIPT_NAME" --image-root "$IMAGE_ROOT"
+fi
 
 echo "END TIME=$(date)"
