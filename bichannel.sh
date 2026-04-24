@@ -24,6 +24,7 @@ fi
 : "${FH_WORKDIR:=/home/msds/tans0444}"
 : "${FH_IMAGE_ROOT:=${FH_WORKDIR}/celeba/img_align_celeba}"
 : "${FH_CHECKPOINT_DIR:=${FH_WORKDIR}/results_bichannel/checkpoints}"
+: "${FH_BICHANNEL_CHECKPOINT:=}"
 
 module load "$CUDA_MODULE"
 module load "$ANACONDA_MODULE"
@@ -42,25 +43,12 @@ CHECKPOINT_DIR="$FH_CHECKPOINT_DIR"
 
 cd "$WORKDIR"
 
-echo "PWD=$(pwd)"
-echo "HOSTNAME=$(hostname)"
-echo "START TIME=$(date)"
-echo "CONDA_PREFIX=$CONDA_PREFIX"
-
-python -c "import sys; print(sys.executable)"
-python -c "import torch; print('torch:', torch.__version__); print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
-
-if [ ! -f "$SCRIPT_NAME" ]; then
-    echo "ERROR: $SCRIPT_NAME not found in $WORKDIR"
-    exit 1
-fi
-
 LATEST_VALID_CKPT=""
 
 if [ -d "$CHECKPOINT_DIR" ]; then
     echo "Searching for latest valid checkpoint in $CHECKPOINT_DIR"
 
-    for ckpt in $(find "$CHECKPOINT_DIR" -maxdepth 1 -name 'bichannel_epoch_*.pth' | sort -r); do
+    for ckpt in $(find "$CHECKPOINT_DIR" -name 'bichannel_epoch_*.pth' | sort -r); do
         echo "Checking checkpoint: $ckpt"
         if python - "$ckpt" <<'PY'
 import sys
@@ -83,11 +71,27 @@ PY
     done
 fi
 
+echo "PWD=$(pwd)"
+echo "HOSTNAME=$(hostname)"
+echo "START TIME=$(date)"
+echo "CONDA_PREFIX=$CONDA_PREFIX"
+
+python -c "import sys; print(sys.executable)"
+python -c "import torch; print('torch:', torch.__version__); print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+
+if [ ! -f "$SCRIPT_NAME" ]; then
+    echo "ERROR: $SCRIPT_NAME not found in $WORKDIR"
+    exit 1
+fi
+
 if [ -n "$LATEST_VALID_CKPT" ]; then
-    echo "Resuming from latest valid checkpoint: $LATEST_VALID_CKPT"
+    if [ ! -f "$LATEST_VALID_CKPT" ]; then
+        echo "ERROR: checkpoint not found: $LATEST_VALID_CKPT"
+        exit 1
+    fi
+    echo "Resuming BiChannelCNN from checkpoint: $LATEST_VALID_CKPT"
     python "$SCRIPT_NAME" --image-root "$IMAGE_ROOT" --resume "$LATEST_VALID_CKPT"
 else
-    echo "No valid checkpoint found. Starting from scratch."
     python "$SCRIPT_NAME" --image-root "$IMAGE_ROOT"
 fi
 

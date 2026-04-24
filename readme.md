@@ -2,6 +2,25 @@
 
 This repository contains our organized implementation for face hallucination (single-image face super-resolution), based on the AAAI 2015 paper.
 
+## How to run Face Hallucination in the Wild Codebase
+**Setup**
+1. CelebA dataset to be available at the project root folder
+2. Run the ./setup.sh file to set up DL2 conda environment. Enable permissions if required for execution.
+
+**Configuration**
+1. Update the following parameters in the .env file
+    - FH_WORKDIR: Configure to project root, where all files are located
+    - FH_IMAGE_ROOT: Configure to point to "img_align_celeba" in the CelebA dataset
+    - FH_CHECKPOINT_DIR: Configure to point to "results_bichannel" in project root
+    - FH_BASIC_CHECKPOINT: Configure to point to "results_basiccnn" in project root
+2. To adjust Experiment parameters, please edit the configuration values in BASIC_CONFIG of common_config.py
+
+**Training Basic CNN for prebuilt weights**
+1. Run the ./basiccnn.sh file
+
+**Training Bichannel CNN, Classical Methods and Evaluation of Models**
+1. Run the ./bichannel.sh file
+
 ## Reference Paper
 **Learning Face Hallucination in the Wild**  
 Erjin Zhou, Haoqiang Fan, Zhimin Cao, Yuning Jiang, Qi Yin  
