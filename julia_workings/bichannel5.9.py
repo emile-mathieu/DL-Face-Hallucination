@@ -16,6 +16,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
+from common_config import BICHANNEL_CONFIG
+
 '''
 ==================================================================
 bichannel 5.9
@@ -30,50 +32,39 @@ Changes vs previous version:
 # ============================================================
 # Config
 # ============================================================
-WORKDIR = Path("/home/msds/tans0444")  # change this to your own directory
-DEFAULT_IMAGE_ROOTS = [
-    WORKDIR / "celeba" / "img_align_celeba"
-]
+WORKDIR = BICHANNEL_CONFIG["WORKDIR"]
+DEFAULT_IMAGE_ROOTS = BICHANNEL_CONFIG["DEFAULT_IMAGE_ROOTS"]
+RESULTS_DIR = BICHANNEL_CONFIG["RESULTS_DIR"]
+SPLITS_DIR = BICHANNEL_CONFIG["SPLITS_DIR"]
+CHECKPOINT_DIR = BICHANNEL_CONFIG["CHECKPOINT_DIR"]
 
-RESULTS_DIR = WORKDIR / "results_bichannel"
-SPLITS_DIR = WORKDIR / "splits_bichannel"
+SEED = BICHANNEL_CONFIG["SEED"]
+MAX_IMAGES = BICHANNEL_CONFIG["MAX_IMAGES"]
+TRAIN_RATIO = BICHANNEL_CONFIG["TRAIN_RATIO"]
+VAL_RATIO = BICHANNEL_CONFIG["VAL_RATIO"]
+TEST_RATIO = BICHANNEL_CONFIG["TEST_RATIO"]
 
-SEED = 42
-MAX_IMAGES = 100_000
-TRAIN_RATIO = 0.6
-VAL_RATIO = 0.2
-TEST_RATIO = 0.2
+HR_SIZE = BICHANNEL_CONFIG["HR_SIZE"]
+TRAIN_LR_INPUT_SIZE = BICHANNEL_CONFIG["TRAIN_LR_INPUT_SIZE"]
+TEST_FIXED_LR_SIZE = BICHANNEL_CONFIG["TEST_FIXED_LR_SIZE"]
+TEST_NN_INPUT_SIZE = BICHANNEL_CONFIG["TEST_NN_INPUT_SIZE"]
 
-HR_SIZE = (100, 100)           # output HR image size
-TRAIN_LR_INPUT_SIZE = (48, 48) # network input size (paper Table 1)
-TEST_FIXED_LR_SIZE = (50, 50)  # LR size used during test degradation (paper: downsample to 50x50)
-TEST_NN_INPUT_SIZE = (48, 48)  # resize test LR to network input size
+CELEBA_CROP = BICHANNEL_CONFIG["CELEBA_CROP"]
+CROP_FRAC = BICHANNEL_CONFIG["CROP_FRAC"]
+METRIC_CHANNEL = BICHANNEL_CONFIG["METRIC_CHANNEL"]
 
-# CelebA face crop (images are 218×178; crop to face before resize)
-CELEBA_CROP = True   # set False if images are already tight face crops
-CROP_FRAC   = 0.6   # fraction of shorter side to keep
-
-# Metric channel: "y" (luminance, recommended) or "rgb"
-METRIC_CHANNEL = "y"
-
-# Hyperparameters — kept identical to basic_cnn.py so the pretrained conv/fc
-# weights operate in the same training regime as basic_cnn.py.
-BATCH_SIZE    = 32
-NUM_EPOCHS    = 600     # same as basic_cnn.py
-LEARNING_RATE = 5e-4    # same as basic_cnn.py
-MIN_LR        = 1e-6    # same as basic_cnn.py
-WEIGHT_DECAY  = 1e-3    # same as basic_cnn.py
-GRAD_CLIP     = 1.0     # same as basic_cnn.py
-MOMENTUM      = 0.9     # kept for reference; not used by AdamW
-PATIENCE      = 10      # kept for reference; not used by warmup-cosine schedule
-NUM_WORKERS   = 2
-
-WARMUP_EPOCHS = 10      # same as basic_cnn.py
-LR_T_MAX      = 590     # same as basic_cnn.py — cosine cycle = NUM_EPOCHS - WARMUP_EPOCHS
-
-KEEP_LAST_N   = 3       # rolling checkpoint window
-
-# CHECKPOINT_DIR = RESULTS_DIR / "checkpoints"
+BATCH_SIZE = BICHANNEL_CONFIG["BATCH_SIZE"]
+NUM_EPOCHS = BICHANNEL_CONFIG["NUM_EPOCHS"]
+LEARNING_RATE = BICHANNEL_CONFIG["LEARNING_RATE"]
+MIN_LR = BICHANNEL_CONFIG["MIN_LR"]
+WEIGHT_DECAY = BICHANNEL_CONFIG["WEIGHT_DECAY"]
+GRAD_CLIP = BICHANNEL_CONFIG["GRAD_CLIP"]
+MOMENTUM = BICHANNEL_CONFIG["MOMENTUM"]
+PATIENCE = BICHANNEL_CONFIG["PATIENCE"]
+NUM_WORKERS = BICHANNEL_CONFIG["NUM_WORKERS"]
+WARMUP_EPOCHS = BICHANNEL_CONFIG["WARMUP_EPOCHS"]
+LR_T_MAX = BICHANNEL_CONFIG["LR_T_MAX"]
+KEEP_LAST_N = BICHANNEL_CONFIG["KEEP_LAST_N"]
 
 
 # ============================================================

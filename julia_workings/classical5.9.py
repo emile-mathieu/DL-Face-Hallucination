@@ -18,42 +18,41 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from common_config import CLASSICAL_CONFIG
+
 # ============================================================
 # Config
 # ============================================================
-WORKDIR     = Path("C:/Users/julia/Desktop/celeba")
-SPLITS_DIR  = Path("C:/Users/julia/Desktop/splits_basiccnn")
-RESULTS_DIR = Path("C:/Users/julia/Desktop/results_classical")
-IMAGE_DIR   = WORKDIR / "img_align_celeba"
+WORKDIR = CLASSICAL_CONFIG["WORKDIR"]
+SPLITS_DIR = CLASSICAL_CONFIG["SPLITS_DIR"]
+RESULTS_DIR = CLASSICAL_CONFIG["RESULTS_DIR"]
+IMAGE_DIR = CLASSICAL_CONFIG["IMAGE_DIR"]
 
-SEED         = 43
-HR_SIZE      = (100, 100)
-TEST_LR_SIZE = (50, 50)
+SEED = CLASSICAL_CONFIG["SEED"]
+HR_SIZE = CLASSICAL_CONFIG["HR_SIZE"]
+TEST_LR_SIZE = CLASSICAL_CONFIG["TEST_LR_SIZE"]
 
-CELEBA_CROP = True
-CROP_FRAC   = 0.6
+CELEBA_CROP = CLASSICAL_CONFIG["CELEBA_CROP"]
+CROP_FRAC = CLASSICAL_CONFIG["CROP_FRAC"]
 
-max_images = 100
-N_TRAIN    = 200     
-N_TEST     = 50      
-USE_SPLITS = True
+max_images = CLASSICAL_CONFIG["max_images"]
+N_TRAIN = CLASSICAL_CONFIG["N_TRAIN"]
+N_TEST = CLASSICAL_CONFIG["N_TEST"]
+USE_SPLITS = CLASSICAL_CONFIG["USE_SPLITS"]
 
-# SC1 parameters 
-SC1_PATCH_SIZE = 5        
-SC1_DICT_SIZE  = 256   
-SC1_LAMBDA     = 0.1
-SC1_N_TRAIN    = 200       
-SC1_ISTA_ITERS = 30      
+SC1_PATCH_SIZE = CLASSICAL_CONFIG["SC1_PATCH_SIZE"]
+SC1_DICT_SIZE = CLASSICAL_CONFIG["SC1_DICT_SIZE"]
+SC1_LAMBDA = CLASSICAL_CONFIG["SC1_LAMBDA"]
+SC1_N_TRAIN = CLASSICAL_CONFIG["SC1_N_TRAIN"]
+SC1_ISTA_ITERS = CLASSICAL_CONFIG["SC1_ISTA_ITERS"]
 
-# SC2 parameters 
-SC2_PATCH_SIZE = 5    
-SC2_SIGMA_K    = 0.12     
-SC2_LAMBDA_REG = 0.05     
-SC2_N_BASIS    = 256     
-SC2_N_TRAIN    = 200
+SC2_PATCH_SIZE = CLASSICAL_CONFIG["SC2_PATCH_SIZE"]
+SC2_SIGMA_K = CLASSICAL_CONFIG["SC2_SIGMA_K"]
+SC2_LAMBDA_REG = CLASSICAL_CONFIG["SC2_LAMBDA_REG"]
+SC2_N_BASIS = CLASSICAL_CONFIG["SC2_N_BASIS"]
+SC2_N_TRAIN = CLASSICAL_CONFIG["SC2_N_TRAIN"]
 
-# SFH
-SFH_MAX_EXEMPLARS = 25    # fine as-is
+SFH_MAX_EXEMPLARS = CLASSICAL_CONFIG["SFH_MAX_EXEMPLARS"]
 
 # ============================================================
 # Dataset Utilities

@@ -11,19 +11,25 @@
 
 set -eo pipefail
 
-module load cuda/12.8.0
-module load anaconda
+: "${CUDA_MODULE:=cuda/12.8.0}"
+: "${ANACONDA_MODULE:=anaconda}"
+: "${CONDA_ENV:=DL2}"
+: "${FH_WORKDIR:=/home/msds/tans0444}"
+: "${FH_IMAGE_ROOT:=/home/msds/tans0444/celeba/img_align_celeba}"
+
+module load "$CUDA_MODULE"
+module load "$ANACONDA_MODULE"
 
 eval "$(conda shell.bash hook)"
 export QT_XCB_GL_INTEGRATION=""
-conda activate DL2 #change your environment 
+conda activate "$CONDA_ENV" #change your environment 
 
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-WORKDIR=/home/msds/tans0444 #change to your own directory
+WORKDIR="$FH_WORKDIR" #change to your own directory
 SCRIPT_NAME=basic5.py
-IMAGE_ROOT=/home/msds/tans0444/celeba/img_align_celeba #change to your own directory 
+IMAGE_ROOT="$FH_IMAGE_ROOT" #change to your own directory 
 
 cd "$WORKDIR"
 

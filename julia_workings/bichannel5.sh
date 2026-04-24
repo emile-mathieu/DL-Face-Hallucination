@@ -11,20 +11,27 @@
 
 set -eo pipefail
 
-module load cuda/12.8.0
-module load anaconda
+: "${CUDA_MODULE:=cuda/12.8.0}"
+: "${ANACONDA_MODULE:=anaconda}"
+: "${CONDA_ENV:=DL2}"
+: "${FH_WORKDIR:=/home/msds/tans0444}"
+: "${FH_IMAGE_ROOT:=/home/msds/tans0444/celeba/img_align_celeba}"
+: "${FH_CHECKPOINT_DIR:=/home/msds/tans0444/checkpoints}"
+
+module load "$CUDA_MODULE"
+module load "$ANACONDA_MODULE"
 
 eval "$(conda shell.bash hook)"
 export QT_XCB_GL_INTEGRATION=""
-conda activate DL2
+conda activate "$CONDA_ENV"
 
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-WORKDIR=/home/msds/tans0444
+WORKDIR="$FH_WORKDIR"
 SCRIPT_NAME=bichannel5.py
-IMAGE_ROOT=/home/msds/tans0444/celeba/img_align_celeba
-CHECKPOINT_DIR=/home/msds/tans0444/checkpoints
+IMAGE_ROOT="$FH_IMAGE_ROOT"
+CHECKPOINT_DIR="$FH_CHECKPOINT_DIR"
 
 cd "$WORKDIR"
 

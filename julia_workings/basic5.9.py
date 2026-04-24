@@ -48,47 +48,42 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
+from common_config import BASIC_CONFIG
+
 # ============================================================
 # Config
 # ============================================================
-WORKDIR = Path("/home/msai/ruijiane001/AI6301/Face-Hallucination/Deep-Learning-Face-Hallucination/julia_workings")
-DEFAULT_IMAGE_ROOTS = [WORKDIR / "CelebA" / "img_align_celeba"]
+WORKDIR = BASIC_CONFIG["WORKDIR"]
+DEFAULT_IMAGE_ROOTS = BASIC_CONFIG["DEFAULT_IMAGE_ROOTS"]
+RESULTS_DIR = BASIC_CONFIG["RESULTS_DIR"]
+SPLITS_DIR = BASIC_CONFIG["SPLITS_DIR"]
+CHECKPOINT_DIR = BASIC_CONFIG["CHECKPOINT_DIR"]
 
-RESULTS_DIR    = WORKDIR / "results_basiccnn"
-SPLITS_DIR     = WORKDIR / "splits_basiccnn"
-CHECKPOINT_DIR = RESULTS_DIR / "checkpoints"
+SEED = BASIC_CONFIG["SEED"]
+MAX_IMAGES = BASIC_CONFIG["MAX_IMAGES"]
+TRAIN_RATIO = BASIC_CONFIG["TRAIN_RATIO"]
+VAL_RATIO = BASIC_CONFIG["VAL_RATIO"]
+TEST_RATIO = BASIC_CONFIG["TEST_RATIO"]
 
-SEED        = 42
-MAX_IMAGES  = 100_000
-TRAIN_RATIO = 0.6
-VAL_RATIO   = 0.2
-TEST_RATIO  = 0.2
+HR_SIZE = BASIC_CONFIG["HR_SIZE"]
+TRAIN_LR_INPUT_SIZE = BASIC_CONFIG["TRAIN_LR_INPUT_SIZE"]
+TEST_FIXED_LR_SIZE = BASIC_CONFIG["TEST_FIXED_LR_SIZE"]
+TEST_NN_INPUT_SIZE = BASIC_CONFIG["TEST_NN_INPUT_SIZE"]
 
-HR_SIZE             = (100, 100)
-TRAIN_LR_INPUT_SIZE = (48, 48)
-TEST_FIXED_LR_SIZE  = (50, 50)
-TEST_NN_INPUT_SIZE  = (48, 48)
+CELEBA_CROP = BASIC_CONFIG["CELEBA_CROP"]
+CROP_FRAC = BASIC_CONFIG["CROP_FRAC"]
+METRIC_CHANNEL = BASIC_CONFIG["METRIC_CHANNEL"]
 
-CELEBA_CROP    = True
-CROP_FRAC      = 0.60
-METRIC_CHANNEL = "y"   # "y" = luminance (paper convention), "rgb" = full colour
-
-# ── Hyperparameters ──────────────────────────────────────────
-BATCH_SIZE    = 32
-NUM_EPOCHS    = 600     # extended from 400 — cosine LR has more room to improve
-                         # at epoch 323 LR was already 4.7e-5 (schedule nearly done)
-                         # 600 epochs gives 590-epoch cosine so LR stays above 1e-5
-                         # until epoch ~550, giving 200+ extra useful training epochs
-LEARNING_RATE = 5e-4    # unchanged — proven optimal
-MIN_LR        = 1e-6    # unchanged
-WEIGHT_DECAY  = 1e-3    # unchanged
-GRAD_CLIP     = 1.0
-NUM_WORKERS   = 2
-
-WARMUP_EPOCHS = 10      # unchanged
-LR_T_MAX      = 590     # cosine cycle = NUM_EPOCHS - WARMUP_EPOCHS
-
-KEEP_LAST_N = 3
+BATCH_SIZE = BASIC_CONFIG["BATCH_SIZE"]
+NUM_EPOCHS = BASIC_CONFIG["NUM_EPOCHS"]
+LEARNING_RATE = BASIC_CONFIG["LEARNING_RATE"]
+MIN_LR = BASIC_CONFIG["MIN_LR"]
+WEIGHT_DECAY = BASIC_CONFIG["WEIGHT_DECAY"]
+GRAD_CLIP = BASIC_CONFIG["GRAD_CLIP"]
+NUM_WORKERS = BASIC_CONFIG["NUM_WORKERS"]
+WARMUP_EPOCHS = BASIC_CONFIG["WARMUP_EPOCHS"]
+LR_T_MAX = BASIC_CONFIG["LR_T_MAX"]
+KEEP_LAST_N = BASIC_CONFIG["KEEP_LAST_N"]
 
 
 # ============================================================
