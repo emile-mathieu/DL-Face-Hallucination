@@ -73,7 +73,7 @@ LR_T_MAX      = 590     # same as basic_cnn.py — cosine cycle = NUM_EPOCHS - W
 
 KEEP_LAST_N   = 3       # rolling checkpoint window
 
-# CHECKPOINT_DIR = RESULTS_DIR / "checkpoints"
+CHECKPOINT_DIR = RESULTS_DIR / "checkpoints"
 
 
 # ============================================================

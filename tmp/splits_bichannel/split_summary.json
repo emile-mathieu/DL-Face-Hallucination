@@ -1,0 +1,8 @@
+{
+  "image_root": "/home/msds/tans0444/celeba/img_align_celeba",
+  "seed": 42,
+  "max_images": 100000,
+  "train": 60000,
+  "val": 20000,
+  "test": 20000
+}

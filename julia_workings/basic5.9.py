@@ -51,8 +51,8 @@ from torch.utils.data import Dataset, DataLoader
 # ============================================================
 # Config
 # ============================================================
-WORKDIR = Path("/home/msds/tans0444")
-DEFAULT_IMAGE_ROOTS = [WORKDIR / "celeba" / "img_align_celeba"]
+WORKDIR = Path("/home/msai/ruijiane001/AI6301/Face-Hallucination/Deep-Learning-Face-Hallucination/julia_workings")
+DEFAULT_IMAGE_ROOTS = [WORKDIR / "CelebA" / "img_align_celeba"]
 
 RESULTS_DIR    = WORKDIR / "results_basiccnn"
 SPLITS_DIR     = WORKDIR / "splits_basiccnn"

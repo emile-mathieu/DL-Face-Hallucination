@@ -24,7 +24,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 WORKDIR=/home/msds/tans0444
 SCRIPT_NAME=bichannel5.py
 IMAGE_ROOT=/home/msds/tans0444/celeba/img_align_celeba
-CHECKPOINT_DIR=/home/msds/tans0444/checkpoints
+CHECKPOINT_DIR=/home/msds/tans0444/results_bichannel/checkpoints
 
 cd "$WORKDIR"
 
