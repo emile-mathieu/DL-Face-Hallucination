@@ -2,6 +2,8 @@
 
 This repository contains our organized implementation for face hallucination (single-image face super-resolution), based on the AAAI 2015 paper.
 
+Group Members: **Emile Mathieu, Julia Tan, Eugene Chua, Steve Peck, Sashenka Benediktus**.
+
 ## How to run Face Hallucination in the Wild Codebase
 **Setup**
 1. CelebA dataset to be available at the project root folder
