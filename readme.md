@@ -38,7 +38,7 @@ https://ojs.aaai.org/index.php/AAAI/article/view/9795
 6. SFH classical baseline
 
 ## Repository Entry Point
-The main entry point is `main.py`.
+The main entry point is `experiments/main.py`.
 
 ### Model Modes
 - `basic`
@@ -52,14 +52,14 @@ The main entry point is `main.py`.
 ## Run Commands
 ### Local run examples
 ```bash
-python main.py --mode basic --task train-cnn
-python main.py --mode bichannel --task train-cnn
-python main.py --mode bichannel --task classical-only
-python main.py --mode bichannel --task all
+python experiments/main.py --mode basic --task train-cnn
+python experiments/main.py --mode bichannel --task train-cnn
+python experiments/main.py --mode bichannel --task classical-only
+python experiments/main.py --mode bichannel --task all
 ```
 
 ### SLURM run
-Core scripts are in `SLURM job scripts/`:
+Core scripts are in `experiments/SLURM job scripts/`:
 - `slurm_train_basic.sh`
 - `slurm_train_bichannel.sh`
 - `slurm_eval_baselines.sh`
@@ -67,22 +67,22 @@ Core scripts are in `SLURM job scripts/`:
 
 Recommended single-command submission:
 ```bash
-bash "SLURM job scripts/slurm_submit_all_three.sh"
+bash "experiments/SLURM job scripts/slurm_submit_all_three.sh"
 ```
 
 ## Data Requirements
 The pipeline expects split folders:
-- `data/train`
-- `data/val`
-- `data/test`
+- `experiments/data/train`
+- `experiments/data/val`
+- `experiments/data/test`
 
 Prepare data with:
 ```bash
-python setup/setup_data.py
+python experiments/setup/setup_data.py
 ```
 
 ## Configuration
-All runtime settings are centralized in `config.py`, including:
+All runtime settings are centralized in `experiments/config.py`, including:
 - paths
 - model hyperparameters
 - scheduler settings
@@ -96,8 +96,8 @@ All runtime settings are centralized in `config.py`, including:
 - Images: `results/images/`
 
 ## High-Level Pipeline
-1. Build/load data from `data/`
-2. Build selected model from `models/model.py`
-3. Train/evaluate CNN via `training/train.py` and `training/test.py`
-4. Train/evaluate classical models via `training/classical.py` and `reconstruction/reconstruction.py`
-5. Save checkpoints and metrics to `checkpoints/` and `results/`
+1. Build/load data from `experiments/data/`
+2. Build selected model from `experiments/models/model.py`
+3. Train/evaluate CNN via `experiments/training/train.py` and `experiments/training/test.py`
+4. Train/evaluate classical models via `experiments/training/classical.py` and `experiments/reconstruction/reconstruction.py`
+5. Save checkpoints and metrics to `experiments/checkpoints/` and `experiments/results/`
