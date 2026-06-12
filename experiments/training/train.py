@@ -14,21 +14,57 @@ from utils.utils import (
 
 class WarmupCosineScheduler(optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer, warmup_epochs: int, t_max: int, min_lr: float, last_epoch: int = -1):
-        self.warmup = max(0, int(warmup_epochs))
-        self.t_max = max(1, int(t_max))
+        # warmup is the maximum iteration of epochs for the linear warmup phase
+        # cosine_iterations is the number of epochs for the cosine annealing phase (after warmup)
+        
+        self.warmup_iterations = max(0, int(warmup_epochs))
+        self.cosine_iterations = max(1, int(t_max))
         self.min_lr = float(min_lr)
+        
         super().__init__(optimizer, last_epoch)
 
+    # Got to override the get_lr method to code warmup + cosine annealing logic.
     def get_lr(self):
-        e = self.last_epoch
-        if e < self.warmup:
-            alpha = (e + 1) / max(self.warmup, 1)
-            return [self.min_lr + alpha * (base - self.min_lr) for base in self.base_lrs]
+        # Warmup phase:
+        # We linearly increase the learning rate from min_lr to base_lr over the warmup period.
+        epoch = self.last_epoch
+        
+        if epoch < self.warmup_iterations:
+            # Divide curr epoch by amount of warmup epochs to get a progress ratio from 0 to 1.
+            # Have to add 1 becasue last epoch starts at -1.
+            alpha = (epoch + 1) / max(self.warmup_iterations, 1)
+            
+            difference_towards_base = self.base_lrs[0] - self.min_lr
+            
+            # Linear interpolation basically just min_lr + (progress_ratio * difference_towards_base)
+            linear_interpolation = self.min_lr + (alpha * difference_towards_base)
+            
+            # Only using one param for whole training
+            return [linear_interpolation]
 
-        progress = min((e - self.warmup) / self.t_max, 1.0)
-        cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
-        return [self.min_lr + cosine * (base - self.min_lr) for base in self.base_lrs]
+        else:
+            # Cosine annealing phase:
+            # We decrease the learning rate from base_lr to min_lr following half a cosine wave
+            
+            # How many epochs in cosine phase
+            # Got to remove the warmup epochs from the current epoch to get the progress in the cosine phase.
+            # E,g if warmup is 10 epochs and we are at epoch 12, then we are 2 epochs into the cosine phase.
+            time_into_cosine = epoch - self.warmup_iterations
+            
+            progress = time_into_cosine / self.cosine_iterations
+            progress = min(1.0, progress)
 
+            # Cosine formula modified to go from 1-0
+            # Add 1 to make it go from 2 to 0
+            # Divide by 2 to make it go from 1 to 0 instead of 2 to 0
+            cosine = (1.0 + math.cos(math.pi * progress)) / 2.0
+
+            difference_towards_min = self.base_lrs[0] - self.min_lr
+            
+            # Scale dist between base_lr and min_lr using cosine progress.
+            linear_interpolation = self.min_lr + (cosine * difference_towards_min)
+            
+            return [linear_interpolation]
 
 def _unpack_model_output(model_out):
     if isinstance(model_out, tuple):
