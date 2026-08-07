@@ -1,120 +1,77 @@
 # Project Structure
 
 ```text
-Deep-Learning-Face-Hallucination/
-├── requirements.txt
+DL-Face-Hallucination/
 ├── readme.md
 ├── Project-Structure.md
-├── common_config.py
-├── BasicCNN.py
-├── basiccnn.sh
-├── BiChannelCNN.py
-├── bichannel.sh
-├── ClassicalCNN.py
-│
-├── setup/
-│   ├── environment.yml
-│   ├── setup.sh
-│   └── setup_data.py
-│
+├── requirements.txt
 ├── experiments/
 │   ├── config.py
 │   ├── main.py
-│   │
 │   ├── data/
-│   │   ├── dataset.py
-│   │   └── dataloader.py
-│   │
+│   │   ├── dataloader.py
+│   │   └── dataset.py
 │   ├── models/
 │   │   └── model.py
-│   │
-│   ├── training/
-│   │   ├── train.py
-│   │   ├── test.py
-│   │   ├── inference.py
-│   │   └── classical.py
-│   │
 │   ├── reconstruction/
+│   │   ├── bichannel5.9.py
+│   │   ├── bichannel5.sh
 │   │   ├── reconstruction.py
-│   │   ├── test.py
-│   │   └── bichannel5.9.py
-│   │   └── bichannel5.sh
-│   │
-│   ├── utils/
-│   │   ├── utils.py
-│   │   └── logger.py
-│   │
+│   │   └── test.py
 │   ├── splits_bichannel/
 │   │   ├── split_summary.json
+│   │   ├── test.txt
 │   │   ├── train.txt
-│   │   ├── val.txt
-│   │   └── test.txt
-│   │
+│   │   └── val.txt
+│   ├── training/
+│   │   ├── classical.py
+│   │   ├── inference.py
+│   │   ├── test.py
+│   │   └── train.py
+│   ├── utils/
+│   │   ├── logger.py
+│   │   └── utils.py
 │   └── SLURM job scripts/
 │       ├── readme.md
-│       ├── slurm_train_basic.sh
-│       ├── slurm_train_bichannel.sh
 │       ├── slurm_eval_baselines.sh
 │       ├── slurm_eval_gaussian.sh
 │       ├── slurm_eval_motion.sh
-│       └── slurm_submit_all_three.sh
-│
-├── checkpoints/                # generated at runtime
-└── results/                    # generated at runtime
+│       ├── slurm_submit_all_three.sh
+│       ├── slurm_train_basic.sh
+│       └── slurm_train_bichannel.sh
+└── results/
+	├── classical.py
+	├── config.py
+	├── dataset.py
+	├── environment.yml
+	├── main.py
+	├── models.py
+	├── readme.txt
+	├── run_classical.sh
+	├── setup.sh
+	├── setup_data.py
+	├── test_models.sh
+	├── train_basic.sh
+	├── train_bichannel.sh
+	├── trainer.py
+	└── utils.py
 ```
 
-## Core Modules
+## Overview
+The repository has two layers: `results/` and `experiments/`.
+## Main Folders
+### `results/`
+- `main.py` is the submission entry point.
+- `config.py` contains the configuration settings.
+- `dataset.py`, `trainer.py`, `models.py`, `classical.py`, and `utils.py` make up the main submission workflow.
+- `setup.sh`, `setup_data.py`, and the shell scripts support setup and runs.
+- `environment.yml` defines the conda environment.
 
-### `experiments/main.py`
-Unified pipeline entry point.
-- Selects mode: `basic` or `bichannel`
-- Selects task: `all`, `train-cnn`, `classical-only`
-- Coordinates training, evaluation, checkpoint loading, and CSV export
+### `experiments/`
+- `main.py` is the experimental entry point.
+- `config.py` contains the configuration settings.
+- `data/`, `models/`, `training/`, and `reconstruction/` contain main bulding blocks for the experimental workflow.
+- `SLURM job scripts/` contains cluster run scripts.
 
-### `experiments/config.py`
-Centralized config for:
-- data/checkpoint/result paths
-- Basic/BiChannel hyperparameters
-- scheduler settings
-- SC1/SC2/SFH settings
-- test settings (sigma, motion length, sample limits)
-
-### `experiments/data/`
-- `dataset.py`: face dataset loading, degradation (gaussian/motion), per-image normalization
-- `dataloader.py`: train/val/test/classical dataloader builders
-
-### `experiments/models/`
-- `model.py`: `BasicCNN` and `BiChannelCNN`
-
-### `experiments/training/`
-- `train.py`: CNN training loop, warmup-cosine scheduler, checkpoint rolling
-- `test.py`: CNN test-time evaluation helpers
-- `inference.py`: utility functions for sample output inference
-- `classical.py`: build/load/train/eval orchestration for SC1/SC2/SFH
-
-### `experiments/reconstruction/`
-- `reconstruction.py`: classical super-resolution methods and shared routines
-- `test.py`: reconstruction testing helpers
-
-### `experiments/utils/`
-- `utils.py`: metrics, checkpoint IO, pickle model IO, image saving
-- `logger.py`: CSV metric logging helper
-
-## Pipeline Overview
-
-### CNN path
-1. Build dataloaders from `experiments/data/`
-2. Build model from `experiments/models/model.py`
-3. Train/load via `experiments/training/train.py`
-4. Evaluate via `experiments/training/test.py`
-5. Save model and metrics
-
-### Classical path
-1. Build/load SC1, SC2, SFH via `experiments/training/classical.py`
-2. Use implementations from `experiments/reconstruction/reconstruction.py`
-3. Evaluate on configured test settings
-4. Save metrics and images
-
-## Input / Output Shapes
-- Input (LR): `(B, 3, 48, 48)`
-- Output (HR): `(B, 3, 100, 100)`
+### More information
+See the README files in each folder for run commands and setup notes.
