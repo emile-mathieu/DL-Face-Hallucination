@@ -1,0 +1,35 @@
+name: DL2
+
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pip
+
+  # Core libraries
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - torchmetrics
+
+  # ML / DL
+  - pytorch
+  - torchvision
+
+  # Image processing
+  - pillow
+  - scikit-image
+  - opencv
+
+  # Utilities
+  - tqdm
+  - pyyaml
+  - scikit-learn
+
+  # pip-only packages
+  - pip:
+      - face-alignment

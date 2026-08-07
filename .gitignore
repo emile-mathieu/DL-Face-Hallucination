@@ -184,7 +184,6 @@ CelebA/
 data/test/
 data/train/
 data/val/
-results/
 checkpoints/
 
 # Dependencies
